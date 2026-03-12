@@ -1,0 +1,5 @@
+Background = #141414 
+Green = #C7DA2C 
+White1 = #FEFDFB
+White2 = #D9D9DA 
+Grey = #2A2A2A
