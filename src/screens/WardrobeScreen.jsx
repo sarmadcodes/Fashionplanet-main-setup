@@ -12,7 +12,8 @@ import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
 import { apiFetchWardrobeItems, apiDeleteWardrobeItem } from '../services/mockApi';
 
-const FILTERS = [
+// Default categories
+const DEFAULT_CATEGORIES = [
   { id: 1, name: 'All' },
   { id: 2, name: 'Tops' },
   { id: 3, name: 'Bottoms' },
@@ -118,6 +119,7 @@ const WardrobeScreen = ({ navigation }) => {
   const [displayed, setDisplayed]   = useState([]);
   const [activeFilter, setFilter]   = useState('All');
   const [error, setError]           = useState('');
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
 
   useFocusEffect(
     useCallback(() => {
@@ -131,7 +133,17 @@ const WardrobeScreen = ({ navigation }) => {
       setError('');
       const data = await apiFetchWardrobeItems();
       setAllItems(data);
-      applyFilter(data, activeFilter);
+      
+      // Extract unique categories from items and combine with defaults
+      const itemCategories = [...new Set(data.map(item => item.category).filter(Boolean))];
+      const allCategories = itemCategories.filter(cat => !DEFAULT_CATEGORIES.some(def => def.name === cat));
+      const finalCategories = [
+        ...DEFAULT_CATEGORIES,
+        ...allCategories.map((cat, idx) => ({ id: DEFAULT_CATEGORIES.length + idx, name: cat }))
+      ];
+      setCategories(finalCategories);
+      
+      applyFilter(data, 'All');
     } catch (err) {
       setError('Failed to load wardrobe.');
     } finally {
@@ -145,6 +157,16 @@ const WardrobeScreen = ({ navigation }) => {
       setError('');
       const data = await apiFetchWardrobeItems();
       setAllItems(data);
+      
+      // Extract unique categories from items and combine with defaults
+      const itemCategories = [...new Set(data.map(item => item.category).filter(Boolean))];
+      const allCategories = itemCategories.filter(cat => !DEFAULT_CATEGORIES.some(def => def.name === cat));
+      const finalCategories = [
+        ...DEFAULT_CATEGORIES,
+        ...allCategories.map((cat, idx) => ({ id: DEFAULT_CATEGORIES.length + idx, name: cat }))
+      ];
+      setCategories(finalCategories);
+      
       applyFilter(data, activeFilter);
     } catch {
       setError('Failed to refresh.');
@@ -217,7 +239,7 @@ const WardrobeScreen = ({ navigation }) => {
 
           {/* Filters */}
           <FilterGroup
-            items={FILTERS}
+            items={categories}
             onSelect={(f) => applyFilter(allItems, f.name)}
             activeFilter={activeFilter}
             theme={theme}
@@ -254,9 +276,9 @@ const WardrobeScreen = ({ navigation }) => {
           ) : (
             rows.map((row, ri) => (
               <View key={ri} style={styles.gridRow}>
-                {row.map((item) => (
+                {row.map((item, ci) => (
                   <WardrobeCard
-                    key={item.id}
+                    key={`${String(item.id || 'item')}_${ri}_${ci}`}
                     item={item}
                     theme={theme}
                     cardWidth={cardWidth}

@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   Image, ScrollView, StatusBar, StyleSheet, Text,
-  TouchableOpacity, View,
+  TouchableOpacity, View, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,7 +10,8 @@ import CustomButton from '../components/CustomButton';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchOutfits, apiFetchProfile } from '../services/mockApi';
+import { apiFetchOutfits, apiFetchProfile, apiFetchSavedPosts } from '../services/mockApi';
+import { getSavedPosts } from '../services/appStore';
 
 // ─── Skeleton ─────────────────────────────────────────────────
 const Skeleton = ({ w, h, r = 8, style }) => {
@@ -41,6 +42,53 @@ const InitialsAvatar = ({ name, size = 72, theme }) => {
   );
 };
 
+const ProfileAvatar = ({ uri, name, size = 72, theme }) => {
+  if (uri) {
+    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+  }
+  return <InitialsAvatar name={name} size={size} theme={theme} />;
+};
+
+// ─── Saved Post Card ──────────────────────────────────────────
+const SavedPostCard = ({ item, theme, width }) => (
+  <TouchableOpacity
+    style={[{
+      width: (width - 52) / 2,
+      borderRadius: 12,
+      overflow: 'hidden',
+      backgroundColor: theme.card,
+      borderWidth: 0.5,
+      borderColor: theme.border,
+    }]}
+    activeOpacity={0.8}
+  >
+    {item.images && item.images.length > 0 && (
+      <Image
+        source={{ uri: item.images[0] }}
+        style={{ width: '100%', height: 140, resizeMode: 'cover' }}
+      />
+    )}
+    <View style={{ padding: 10 }}>
+      <Text style={[{ fontSize: 12, fontWeight: '700', color: theme.text }]} numberOfLines={1}>
+        {item.userName}
+      </Text>
+      <Text style={[{ fontSize: 11, color: theme.secondaryText, marginTop: 2 }]} numberOfLines={2}>
+        {item.caption}
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+          <Ionicons name="heart" size={12} color="#E53E3E" />
+          <Text style={[{ fontSize: 10, color: theme.secondaryText }]}>{item.likes}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+          <Ionicons name="chatbubble" size={12} color={theme.primary} />
+          <Text style={[{ fontSize: 10, color: theme.secondaryText }]}>{item.comments}</Text>
+        </View>
+      </View>
+    </View>
+  </TouchableOpacity>
+);
+
 // ─── Outfit thumbnail card ────────────────────────────────────
 const OutfitThumbCard = ({ item, theme, onPress }) => (
   <TouchableOpacity
@@ -68,11 +116,13 @@ const thumbStyles = StyleSheet.create({
 const ProfileScreen = ({ navigation }) => {
   const { isDark } = useTheme();
   const { user, updateUser } = useAuth();
+  const { width } = useWindowDimensions();
   const theme = isDark ? darkTheme : lightTheme;
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [recentOutfits, setRecentOutfits] = useState([]);
+  const [savedPosts, setSavedPosts] = useState([]);
 
   useFocusEffect(
     useCallback(() => { load(); }, [])
@@ -81,17 +131,31 @@ const ProfileScreen = ({ navigation }) => {
   const load = async () => {
     try {
       setLoading(true);
-      const [data, outfits] = await Promise.all([apiFetchProfile(), apiFetchOutfits()]);
+      const [data, outfits, saved] = await Promise.all([
+        apiFetchProfile(),
+        apiFetchOutfits(),
+        apiFetchSavedPosts(),
+      ]);
+      
+      // Load profile and outfits
       setProfile(data);
       setRecentOutfits((outfits || []).slice(0, 3).map((item) => ({
         ...item,
         subtitle: item.category || item.brand || 'Outfit',
       })));
+      
+      // Load saved posts
+      setSavedPosts((saved || []).map((p) => ({
+        ...p,
+        id: p.id || p._id,
+      })));
+      
       updateUser(data);
     } catch {
       if (user) {
         setProfile(user);
       }
+      setSavedPosts(getSavedPosts());
     } finally {
       setLoading(false);
     }
@@ -128,7 +192,7 @@ const ProfileScreen = ({ navigation }) => {
               </View>
             ) : (
               <View style={styles.profileCardInner}>
-                <InitialsAvatar name={profile?.fullName} size={72} theme={theme} />
+                <ProfileAvatar uri={profile?.avatar} name={profile?.fullName} size={72} theme={theme} />
                 <View style={{ flex: 1, marginLeft: 16 }}>
                   <Text style={[styles.fullName, { color: theme.text }]}>{profile?.fullName}</Text>
                   <Text style={[styles.username, { color: theme.secondaryText }]}>@{profile?.username || 'new_user'}</Text>
@@ -203,6 +267,27 @@ const ProfileScreen = ({ navigation }) => {
               </View>
             ) : null}
           </View>
+
+          {/* Saved Posts */}
+          {savedPosts.length > 0 && (
+            <>
+              <View style={styles.sectionRow}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Saved Posts</Text>
+                <Text style={[styles.seeAll, { color: theme.secondaryText }]}>{savedPosts.length}</Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+                {savedPosts.map((post) => (
+                  <SavedPostCard
+                    key={post.id}
+                    item={post}
+                    theme={theme}
+                    width={width - 40}
+                  />
+                ))}
+              </View>
+            </>
+          )}
 
           {/* Quick Access */}
           <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 16, marginBottom: 12 }]}>

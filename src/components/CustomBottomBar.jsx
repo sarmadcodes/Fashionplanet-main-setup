@@ -40,7 +40,7 @@ const CustomBottomBar = ({ state, navigation }) => {
   }, [state.index]);
 
   return (
-    <View style={[styles.absoluteWrapper, { bottom: insets.bottom }]}>
+    <View style={[styles.absoluteWrapper, { bottom: 0, paddingBottom: insets.bottom }]}>
       <View style={[
         styles.bar,
         {

@@ -4,22 +4,45 @@
 // ─────────────────────────────────────────────────────────────
 
 import {
-  getFeedPosts,
-  getMyPosts,
   addPost,
   togglePostLike,
+  addPostComment,
+  togglePostSave,
+  getSavedPosts,
+  getNotifications,
+  markNotificationRead,
+  syncFeedPosts,
+  updateLocalPost,
+  removeLocalPost,
+  replaceLocalPostId,
 } from './appStore';
-import apiClient from './apiClient';
+import apiClient, { getActiveApiBaseUrl } from './apiClient';
 
 const delay = () => Promise.resolve();
 
-const getApiErrorMessage = (error, fallback) =>
-  error?.response?.data?.message ||
-  error?.response?.data?.errors?.[0]?.msg ||
-  fallback;
+const getApiErrorMessage = (error, fallback) => {
+  if (!error?.response) {
+    return `${fallback} Cannot reach API at ${getActiveApiBaseUrl()}.`;
+  }
+
+  if (error.response.status === 401) {
+    return 'Your session expired. Please log in again.';
+  }
+
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.errors?.[0]?.msg ||
+    fallback
+  );
+};
 
 const normalizeWardrobeItem = (item) => ({
-  id: item.id || item._id,
+  id: String(
+    item.id ||
+    item._id ||
+    item.image ||
+    `${item.name || 'item'}_${item.brand || 'brand'}_${item.createdAt || Date.now()}`
+  ),
   name: item.name,
   brand: item.brand,
   category: item.category,
@@ -32,6 +55,34 @@ const normalizeWardrobeItem = (item) => ({
   title: item.name,
   subtitle: item.brand || item.category,
 });
+
+const normalizePost = (post) => {
+  if (!post) return null;
+  const id = post.id || post._id;
+  if (!id) return null;
+
+  const images = Array.isArray(post.images)
+    ? post.images
+    : post.image
+      ? [post.image?.uri || post.image]
+      : [];
+
+  return {
+    ...post,
+    id: String(id),
+    userName: post.userName || post.user || 'Unknown User',
+    username: post.username || post.handle || '@user',
+    caption: post.caption || '',
+    images,
+    likes: Number(post.likes) || 0,
+    comments: Number(post.comments) || 0,
+    commentsList: Array.isArray(post.commentsList) ? post.commentsList : [],
+    liked: Boolean(post.liked),
+    saved: Boolean(post.saved),
+  };
+};
+
+const isMongoObjectId = (id) => typeof id === 'string' && /^[a-fA-F0-9]{24}$/.test(id);
 
 // ── AUTH ──────────────────────────────────────────────────────
 
@@ -76,7 +127,7 @@ export const apiSignup = async ({ fullName, email, password }) => {
 
 export const apiFetchProfile = async () => {
   try {
-    const { data } = await apiClient.get('/auth/me');
+    const { data } = await apiClient.get('/profile');
     return data.user;
   } catch (error) {
     const message =
@@ -87,7 +138,30 @@ export const apiFetchProfile = async () => {
 };
 
 export const apiUpdateProfile = async (data) => {
-  return data;
+  try {
+    const formData = new FormData();
+    formData.append('fullName', data.fullName || '');
+    formData.append('username', data.username || '');
+    formData.append('bio', data.bio || '');
+    formData.append('website', data.website || '');
+
+    if (data.avatar?.startsWith?.('http')) {
+      formData.append('avatar', data.avatar);
+    } else if (data.avatar) {
+      formData.append('avatar', {
+        uri: data.avatar,
+        type: 'image/jpeg',
+        name: `avatar_${Date.now()}.jpg`,
+      });
+    }
+
+    const { data: response } = await apiClient.patch('/profile', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.user;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not update profile.'));
+  }
 };
 
 // ── WARDROBE ──────────────────────────────────────────────────
@@ -180,27 +254,140 @@ export const apiDeleteWardrobeItem = async (id) => {
 // ── FEED ──────────────────────────────────────────────────────
 
 export const apiFetchFeedPosts = async () => {
-  await delay(1500);
-  return getFeedPosts();
+  try {
+    const { data } = await apiClient.get('/posts/feed');
+    const remote = (data?.data || []).map(normalizePost).filter(Boolean);
+    return syncFeedPosts(remote);
+  } catch (err) {
+    throw new Error(getApiErrorMessage(err, 'Unable to load community feed.'));
+  }
 };
 
 export const apiFetchMyPosts = async () => {
-  await delay(1000);
-  return getMyPosts();
+  try {
+    const { data } = await apiClient.get('/posts/my');
+    return (data?.data || []).map(normalizePost).filter(Boolean);
+  } catch (err) {
+    throw new Error(getApiErrorMessage(err, 'Unable to load your posts.'));
+  }
 };
 
 export const apiCreatePost = async ({ images, caption }) => {
-  await delay(2200);
   if (!images || images.length === 0)
     throw new Error('Please select at least one image.');
   if (!caption?.trim())
     throw new Error('Please add a caption.');
-  return addPost({ images, caption });
+
+  // Always create local first so post appears instantly and survives refresh.
+  const localPost = addPost({ images, caption: caption.trim() });
+
+  try {
+    const formData = new FormData();
+    formData.append('caption', caption.trim());
+
+    images.forEach((imageUri, index) => {
+      if (!imageUri) return;
+
+      if (String(imageUri).startsWith('http')) {
+        formData.append('images', imageUri);
+      } else {
+        formData.append('images', {
+          uri: imageUri,
+          type: 'image/jpeg',
+          name: `post_${Date.now()}_${index}.jpg`,
+        });
+      }
+    });
+
+    const { data } = await apiClient.post('/posts/create', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    const created = normalizePost(data?.data);
+    if (created?.id) {
+      replaceLocalPostId(localPost.id, created);
+      return created;
+    }
+    throw new Error('Post upload response was invalid');
+  } catch (err) {
+    // Roll back optimistic local post if backend create fails to avoid account-local ghost posts.
+    removeLocalPost(localPost.id);
+    throw new Error(getApiErrorMessage(err, 'Failed to publish post.'));
+  }
 };
 
 export const apiToggleLike = async (postId) => {
-  await delay(400);
-  return togglePostLike(postId);
+  if (!isMongoObjectId(String(postId))) {
+    await delay(200);
+    return togglePostLike(postId);
+  }
+  try {
+    const { data } = await apiClient.post(`/posts/${postId}/like`);
+    return data?.data || {};
+  } catch (err) {
+    await delay(400);
+    return togglePostLike(postId);
+  }
+};
+
+export const apiAddComment = async (postId, text) => {
+  if (!text?.trim()) throw new Error('Comment cannot be empty');
+  if (!isMongoObjectId(String(postId))) {
+    await delay(200);
+    return addPostComment(postId, text.trim());
+  }
+  
+  try {
+    const { data } = await apiClient.post(`/posts/${postId}/comment`, { text: text.trim() });
+    return data?.data?.comment || {};
+  } catch (err) {
+    await delay(300);
+    return addPostComment(postId, text.trim());
+  }
+};
+
+export const apiToggleSavePost = async (postId) => {
+  if (!isMongoObjectId(String(postId))) {
+    await delay(150);
+    return togglePostSave(postId);
+  }
+  try {
+    const { data } = await apiClient.post(`/posts/${postId}/save`);
+    return data?.isSaved || false;
+  } catch (err) {
+    await delay(300);
+    return togglePostSave(postId);
+  }
+};
+
+export const apiFetchSavedPosts = async () => {
+  try {
+    const { data } = await apiClient.get('/posts/saved');
+    return data?.data || [];
+  } catch (err) {
+    await delay(800);
+    return getSavedPosts();
+  }
+};
+
+export const apiFetchNotifications = async () => {
+  try {
+    const { data } = await apiClient.get('/posts/notifications');
+    return data?.data || [];
+  } catch (err) {
+    await delay(600);
+    return getNotifications();
+  }
+};
+
+export const apiMarkNotificationAsRead = async (notificationId) => {
+  try {
+    const { data } = await apiClient.put(`/posts/notification/${notificationId}/read`);
+    return data?.data;
+  } catch (err) {
+    await delay(200);
+    return markNotificationRead(notificationId);
+  }
 };
 
 // ── AI / OUTFIT GENERATION ────────────────────────────────────
@@ -329,5 +516,35 @@ export const apiFetchHomeData = async () => {
     return data.home;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Failed to load dashboard.'));
+  }
+};
+
+export const apiUpdatePost = async (postId, payload) => {
+  if (!postId) throw new Error('Post ID is required.');
+  if (!isMongoObjectId(String(postId))) {
+    await delay(150);
+    return updateLocalPost(postId, { caption: payload?.caption ?? '' });
+  }
+  try {
+    const { data } = await apiClient.patch(`/posts/${postId}`, payload);
+    return normalizePost(data?.data);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not update post.'));
+  }
+};
+
+export const apiDeletePost = async (postId) => {
+  if (!postId) throw new Error('Post ID is required.');
+  if (!isMongoObjectId(String(postId))) {
+    await delay(150);
+    removeLocalPost(postId);
+    return { success: true, message: 'Post deleted locally' };
+  }
+  try {
+    const { data } = await apiClient.delete(`/posts/${postId}`);
+    removeLocalPost(postId);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not delete post.'));
   }
 };

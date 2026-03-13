@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,12 +10,17 @@ import {
   Image,
   useWindowDimensions,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import FilterGroup from '../components/FilterGroup';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
+import { apiFetchFeedPosts, apiToggleLike, apiAddComment, apiToggleSavePost } from '../services/mockApi';
 
 const myFilters = [
   { id: 1, name: 'Winter style' },
@@ -41,59 +46,6 @@ const STYLE_TIPS = [
   },
 ];
 
-const FEED_POSTS = [
-  {
-    id: 'f1',
-    user: 'Sofia M.',
-    handle: '@sofiawears',
-    image: { uri: 'https://images.pexels.com/photos/1536619/pexels-photo-1536619.jpeg' },
-    caption: 'Monochrome moment loving this all-black edit for the office.',
-    likes: 214,
-    saves: 38,
-    tags: ['Minimalist', 'Office'],
-  },
-  {
-    id: 'f2',
-    user: 'Lena K.',
-    handle: '@lena.fits',
-    image: { uri: 'https://images.pexels.com/photos/2983464/pexels-photo-2983464.jpeg' },
-    caption: 'Spring is calling and so is this flowy midi skirt.',
-    likes: 389,
-    saves: 72,
-    tags: ['Spring style', 'Feminine'],
-  },
-  {
-    id: 'f3',
-    user: 'Nour A.',
-    handle: '@nour_ootd',
-    image: { uri: 'https://images.pexels.com/photos/1183266/pexels-photo-1183266.jpeg' },
-    caption: 'Street style done right. Comfort meets cool.',
-    likes: 512,
-    saves: 101,
-    tags: ['Streetwear', 'Casual'],
-  },
-  {
-    id: 'f4',
-    user: 'Hana R.',
-    handle: '@hana.style',
-    image: { uri: 'https://images.pexels.com/photos/1021693/pexels-photo-1021693.jpeg' },
-    caption: 'Date night ready — less is truly more.',
-    likes: 178,
-    saves: 29,
-    tags: ['Evening', 'Minimalist'],
-  },
-  {
-    id: 'f5',
-    user: 'Mia T.',
-    handle: '@mia_threads',
-    image: { uri: 'https://images.pexels.com/photos/3622608/pexels-photo-3622608.jpeg' },
-    caption: 'Vintage finds never disappoint. Thrifted this whole look.',
-    likes: 642,
-    saves: 148,
-    tags: ['Vintage', 'Thrift'],
-  },
-];
-
 const FEATURED = [
   { id: 'g1', image: { uri: 'https://images.pexels.com/photos/1536619/pexels-photo-1536619.jpeg' }, label: 'Minimalist Edit' },
   { id: 'g2', image: { uri: 'https://images.pexels.com/photos/1183266/pexels-photo-1183266.jpeg' }, label: 'Street Style' },
@@ -102,9 +54,16 @@ const FEATURED = [
 ];
 
 // ─── Feed Post Card ───────────────────────────────────────────
-const FeedPost = ({ post, theme, onPress }) => {
-  const [liked, setLiked] = useState(false);
-  const [saved, setSaved] = useState(false);
+const FeedPost = ({ post, theme, onPress, onLike, onSave, onComment }) => {
+  const [imgIndex, setImgIndex] = useState(0);
+
+  if (!post) return null;
+
+  const userName = post.userName || post.user || 'Unknown User';
+  const userHandle = post.username || post.handle || '@user';
+  const userInitial = userName.charAt(0).toUpperCase();
+  const images = post.images || (post.image ? [post.image.uri || post.image] : []);
+  const currentImage = images[imgIndex];
 
   return (
     <TouchableOpacity
@@ -114,38 +73,80 @@ const FeedPost = ({ post, theme, onPress }) => {
     >
       <View style={fpStyles.userRow}>
         <View style={[fpStyles.avatar, { backgroundColor: theme.primary + '30' }]}>
-          <Text style={[fpStyles.avatarText, { color: theme.primary }]}>{post.user[0]}</Text>
+          <Text style={[fpStyles.avatarText, { color: theme.primary }]}>
+            {userInitial}
+          </Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[fpStyles.userName, { color: theme.text }]}>{post.user}</Text>
-          <Text style={[fpStyles.handle, { color: theme.secondaryText }]}>{post.handle}</Text>
+          <Text style={[fpStyles.userName, { color: theme.text }]} numberOfLines={1}>
+            {userName}
+          </Text>
+          <Text style={[fpStyles.handle, { color: theme.secondaryText }]} numberOfLines={1}>
+            {userHandle}
+          </Text>
         </View>
-        <Ionicons name="ellipsis-horizontal" size={18} color={theme.secondaryText} />
+        <TouchableOpacity>
+          <Ionicons name="ellipsis-horizontal" size={18} color={theme.secondaryText} />
+        </TouchableOpacity>
       </View>
 
-      <Image source={post.image} style={fpStyles.img} />
+      {currentImage && (
+        <View style={fpStyles.imgContainer}>
+          <Image 
+            source={typeof currentImage === 'string' ? { uri: currentImage } : currentImage}
+            style={fpStyles.img}
+          />
+          {images.length > 1 && (
+            <View style={fpStyles.imgDots}>
+              {images.map((_, i) => (
+                <TouchableOpacity 
+                  key={i} 
+                  onPress={() => setImgIndex(i)} 
+                  activeOpacity={0.7}
+                >
+                  <View 
+                    style={[
+                      fpStyles.dot, 
+                      { backgroundColor: i === imgIndex ? theme.primary : theme.secondaryText + '50' }
+                    ]} 
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
 
-      <View style={fpStyles.tagsRow}>
-        {post.tags.map(t => (
-          <View key={t} style={[fpStyles.tag, { backgroundColor: theme.primary + '18' }]}>
-            <Text style={[fpStyles.tagText, { color: theme.primary }]}>{t}</Text>
-          </View>
-        ))}
-      </View>
-
-      <Text style={[fpStyles.caption, { color: theme.text }]}>{post.caption}</Text>
+      <Text style={[fpStyles.caption, { color: theme.text }]} numberOfLines={3}>
+        {post.caption}
+      </Text>
 
       <View style={fpStyles.actionsRow}>
-        <TouchableOpacity style={fpStyles.action} onPress={() => setLiked(p => !p)}>
-          <Ionicons name={liked ? 'heart' : 'heart-outline'} size={20} color={liked ? '#E53E3E' : theme.secondaryText} />
-          <Text style={[fpStyles.actionText, { color: theme.secondaryText }]}>{post.likes + (liked ? 1 : 0)}</Text>
+        <TouchableOpacity style={fpStyles.action} onPress={() => onLike?.(post.id)}>
+          <Ionicons 
+            name={post.liked ? 'heart' : 'heart-outline'} 
+            size={20} 
+            color={post.liked ? '#E53E3E' : theme.secondaryText} 
+          />
+          <Text style={[fpStyles.actionText, { color: theme.secondaryText }]}>
+            {post.likes || 0}
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={fpStyles.action} onPress={() => setSaved(p => !p)}>
-          <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color={saved ? theme.primary : theme.secondaryText} />
-          <Text style={[fpStyles.actionText, { color: theme.secondaryText }]}>{post.saves + (saved ? 1 : 0)}</Text>
+        <TouchableOpacity style={fpStyles.action} onPress={() => onComment?.(post.id)}>
+          <Ionicons name="chatbubble-outline" size={20} color={theme.secondaryText} />
+          <Text style={[fpStyles.actionText, { color: theme.secondaryText }]}>
+            {post.comments || 0}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity style={fpStyles.action}>
-          <Ionicons name="arrow-redo-outline" size={20} color={theme.secondaryText} />
+          <Ionicons name="share-social-outline" size={20} color={theme.secondaryText} />
+        </TouchableOpacity>
+        <TouchableOpacity style={fpStyles.action} onPress={() => onSave?.(post.id)}>
+          <Ionicons 
+            name={post.saved ? 'bookmark' : 'bookmark-outline'} 
+            size={20} 
+            color={post.saved ? theme.primary : theme.secondaryText} 
+          />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -153,20 +154,20 @@ const FeedPost = ({ post, theme, onPress }) => {
 };
 
 const fpStyles = StyleSheet.create({
-  card:       { borderRadius: 16, borderWidth: 0.5, marginBottom: 16, overflow: 'hidden' },
-  userRow:    { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  avatar:     { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontWeight: '800', fontSize: 14 },
-  userName:   { fontSize: 13, fontWeight: '700' },
-  handle:     { fontSize: 11, marginTop: 1 },
-  img:        { width: '100%', height: 340, resizeMode: 'cover' },
-  tagsRow:    { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingTop: 12 },
-  tag:        { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 50 },
-  tagText:    { fontSize: 10, fontWeight: '700' },
-  caption:    { fontSize: 13, lineHeight: 19, paddingHorizontal: 12, paddingTop: 8 },
-  actionsRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, gap: 16 },
-  action:     { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  actionText: { fontSize: 12, fontWeight: '600' },
+  card:        { borderRadius: 16, borderWidth: 0.5, marginBottom: 16, overflow: 'hidden' },
+  userRow:     { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
+  avatar:      { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  avatarText:  { fontWeight: '800', fontSize: 14 },
+  userName:    { fontSize: 13, fontWeight: '700' },
+  handle:      { fontSize: 11, marginTop: 1 },
+  imgContainer: { position: 'relative', backgroundColor: '#000' },
+  img:         { width: '100%', height: 300, resizeMode: 'cover' },
+  imgDots:     { position: 'absolute', bottom: 10, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 4 },
+  dot:         { width: 6, height: 6, borderRadius: 3 },
+  caption:     { fontSize: 13, lineHeight: 18, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8 },
+  actionsRow:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 10, gap: 0 },
+  action:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 6 },
+  actionText:  { fontSize: 11, fontWeight: '600' },
 });
 
 // ─── Main Screen ──────────────────────────────────────────────
@@ -176,20 +177,110 @@ const DiscoverScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();
   const cardWidth = (width - 52) / 2;
 
+  const [feedPosts, setFeedPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [expandedIndex, setExpandedIndex] = useState(null);
   const [activeTab, setActiveTab] = useState('feed');
   const [searchQuery, setSearchQuery] = useState('');
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState(null);
+  const [commentText, setCommentText] = useState('');
 
-  const filteredFeedPosts = FEED_POSTS.filter((post) => {
+  useFocusEffect(
+    useCallback(() => {
+      if (feedPosts.length === 0) loadFeed();
+    }, [feedPosts.length])
+  );
+
+  const loadFeed = async () => {
+    try {
+      setLoading(true);
+      const data = await apiFetchFeedPosts();
+      setFeedPosts(data);
+    } catch (err) {
+      Alert.alert('Error', 'Failed to load discover feed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true);
+      const data = await apiFetchFeedPosts();
+      setFeedPosts(data);
+    } catch (err) {
+      Alert.alert('Error', 'Failed to refresh discover feed');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleLike = async (postId) => {
+    setFeedPosts((prev) => prev.map((p) =>
+      p?.id === postId
+        ? { ...p, liked: !p.liked, likes: p.liked ? Math.max(0, (p.likes || 0) - 1) : (p.likes || 0) + 1 }
+        : p
+    ));
+    try {
+      await apiToggleLike(postId);
+    } catch {
+      setFeedPosts((prev) => prev.map((p) =>
+        p?.id === postId
+          ? { ...p, liked: !p.liked, likes: p.liked ? Math.max(0, (p.likes || 0) - 1) : (p.likes || 0) + 1 }
+          : p
+      ));
+    }
+  };
+
+  const handleSave = async (postId) => {
+    setFeedPosts((prev) => prev.map((p) =>
+      p?.id === postId ? { ...p, saved: !p.saved } : p
+    ));
+    try {
+      await apiToggleSavePost(postId);
+    } catch {
+      setFeedPosts((prev) => prev.map((p) =>
+        p?.id === postId ? { ...p, saved: !p.saved } : p
+      ));
+    }
+  };
+
+  const openCommentModal = (postId) => {
+    setSelectedPostId(postId);
+    setCommentText('');
+    setCommentModalVisible(true);
+  };
+
+  const submitComment = async () => {
+    if (!selectedPostId || !commentText.trim()) return;
+    try {
+      await apiAddComment(selectedPostId, commentText.trim());
+      setFeedPosts((prev) => prev.map((p) =>
+        p?.id === selectedPostId ? { ...p, comments: (p.comments || 0) + 1 } : p
+      ));
+      setCommentModalVisible(false);
+      setCommentText('');
+      setSelectedPostId(null);
+    } catch {
+      Alert.alert('Error', 'Failed to add comment');
+    }
+  };
+
+  const filteredFeedPosts = feedPosts.filter((post) => {
+    if (!post) return false;
     const q = searchQuery.trim().toLowerCase();
     if (!q) return true;
+    const userName = (post.userName || post.user || '').toLowerCase();
+    const username = (post.username || post.handle || '').toLowerCase();
+    const caption = (post.caption || '').toLowerCase();
     return (
-      post.user.toLowerCase().includes(q) ||
-      post.handle.toLowerCase().includes(q) ||
-      post.caption.toLowerCase().includes(q) ||
-      post.tags.some((tag) => tag.toLowerCase().includes(q))
+      userName.includes(q) ||
+      username.includes(q) ||
+      caption.includes(q)
     );
-  });
+  }).filter(post => post && post.id);
 
   const handleToggle = index => {
     setExpandedIndex(prev => (prev === index ? null : index));
@@ -204,7 +295,10 @@ const DiscoverScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.background} />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+      >
         <View style={{ paddingBottom: 100 }}>
 
           <View style={styles.header}>
@@ -252,14 +346,31 @@ const DiscoverScreen = ({ navigation }) => {
           {/* Feed Tab */}
           {activeTab === 'feed' && (
             <>
-              {filteredFeedPosts.map(post => (
-                <FeedPost
-                  key={post.id}
-                  post={post}
-                  theme={theme}
-                  onPress={() => navigation.navigate('OutfitsScreen', { product: post })}
-                />
-              ))}
+              {loading ? (
+                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                  <ActivityIndicator size="large" color={theme.primary} />
+                </View>
+              ) : (
+                filteredFeedPosts && filteredFeedPosts.length > 0 ? (
+                  filteredFeedPosts.map(post => 
+                    post && post.id ? (
+                      <FeedPost
+                        key={post.id}
+                        post={post}
+                        theme={theme}
+                        onLike={handleLike}
+                        onSave={handleSave}
+                        onComment={openCommentModal}
+                        onPress={() => navigation.navigate('OutfitsScreen', { product: post })}
+                      />
+                    ) : null
+                  )
+                ) : (
+                  <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                    <Text style={[{ color: theme.secondaryText }]}>No posts found</Text>
+                  </View>
+                )
+              )}
             </>
           )}
 
@@ -338,6 +449,30 @@ const DiscoverScreen = ({ navigation }) => {
 
         </View>
       </ScrollView>
+
+      <Modal visible={commentModalVisible} transparent animationType="fade" onRequestClose={() => setCommentModalVisible(false)}>
+        <View style={styles.commentOverlay}>
+          <View style={[styles.commentBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.commentTitle, { color: theme.text }]}>Add Comment</Text>
+            <TextInput
+              style={[styles.commentInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+              placeholder="Write a comment..."
+              placeholderTextColor={theme.secondaryText}
+              multiline
+              value={commentText}
+              onChangeText={setCommentText}
+            />
+            <View style={styles.commentActions}>
+              <TouchableOpacity onPress={() => setCommentModalVisible(false)} style={[styles.commentBtn, { borderColor: theme.border }]}>
+                <Text style={{ color: theme.secondaryText }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={submitComment} style={[styles.commentBtn, { backgroundColor: theme.primary }]}>
+                <Text style={{ color: '#141414', fontWeight: '700' }}>Post</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -371,4 +506,10 @@ const styles = StyleSheet.create({
   tipTitle:        { fontSize: 13, fontWeight: '700', marginBottom: 4 },
   tipDesc:         { fontSize: 12, lineHeight: 18, marginBottom: 6 },
   tipTime:         { fontSize: 10 },
+  commentOverlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', paddingHorizontal: 20 },
+  commentBox:      { borderRadius: 14, borderWidth: 1, padding: 14 },
+  commentTitle:    { fontSize: 15, fontWeight: '700', marginBottom: 10 },
+  commentInput:    { minHeight: 90, borderWidth: 1, borderRadius: 10, padding: 10, textAlignVertical: 'top' },
+  commentActions:  { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 12 },
+  commentBtn:      { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, borderWidth: 1 },
 });

@@ -10,7 +10,8 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchFeedPosts, apiToggleLike, apiCreatePost } from '../services/mockApi';
+import { apiFetchFeedPosts, apiToggleLike, apiCreatePost, apiAddComment, apiToggleSavePost, apiUpdatePost, apiDeletePost } from '../services/mockApi';
+import ThemedStatusModal from '../components/ThemedStatusModal';
 
 const Skeleton = ({ style }) => {
   const { isDark } = useTheme();
@@ -35,8 +36,10 @@ const Avatar = ({ uri, name, size = 40, theme }) => {
   );
 };
 
-const PostCard = ({ item, theme, onLike }) => {
+const PostCard = ({ item, theme, onLike, onComment, onSave, onOptions }) => {
   const [imgIndex, setImgIndex] = useState(0);
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState('');
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const { width } = useWindowDimensions();
   const imageWidth = width - 32;
@@ -47,6 +50,22 @@ const PostCard = ({ item, theme, onLike }) => {
       Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
     ]).start();
     onLike(item.id);
+  };
+
+  const handleAddComment = () => {
+    if (commentText.trim()) {
+      onComment(item.id, commentText);
+      setCommentText('');
+    }
+  };
+
+  const handleSavePost = () => {
+    onSave(item.id);
+  };
+
+  const handleShare = () => {
+    // Share functionality
+    Alert.alert('Share', 'Post shared successfully!');
   };
 
   return (
@@ -64,8 +83,13 @@ const PostCard = ({ item, theme, onLike }) => {
           </View>
         </View>
         {item.isOwn && (
-          <View style={[postStyles.ownBadge, { borderColor: theme.primary }]}>
-            <Text style={[postStyles.ownText, { color: theme.primary }]}>You</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={[postStyles.ownBadge, { borderColor: theme.primary }]}> 
+              <Text style={[postStyles.ownText, { color: theme.primary }]}>You</Text>
+            </View>
+            <TouchableOpacity onPress={() => onOptions?.(item)} style={{ padding: 4 }}>
+              <Ionicons name="ellipsis-horizontal" size={18} color={theme.secondaryText} />
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -117,17 +141,70 @@ const PostCard = ({ item, theme, onLike }) => {
             {item.likes}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={postStyles.actionBtn} activeOpacity={0.6}>
+        <TouchableOpacity style={postStyles.actionBtn} onPress={() => setShowComments(!showComments)}>
           <Ionicons name="chatbubble-outline" size={20} color={theme.secondaryText} />
           <Text style={[postStyles.actionCount, { color: theme.secondaryText }]}>{item.comments}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={postStyles.actionBtn} activeOpacity={0.6}>
+        <TouchableOpacity style={postStyles.actionBtn} onPress={handleShare}>
           <Ionicons name="share-social-outline" size={20} color={theme.secondaryText} />
         </TouchableOpacity>
-        <TouchableOpacity style={postStyles.actionBtn} activeOpacity={0.6}>
-          <Ionicons name="bookmark-outline" size={20} color={theme.secondaryText} />
+        <TouchableOpacity style={postStyles.actionBtn} onPress={handleSavePost}>
+          <Ionicons name={item.saved ? 'bookmark' : 'bookmark-outline'} size={20} color={item.saved ? theme.primary : theme.secondaryText} />
         </TouchableOpacity>
       </View>
+
+      {/* Comments Section */}
+      {showComments && (
+        <View style={[postStyles.commentsSection, { borderTopColor: theme.border, backgroundColor: theme.card }]}>
+          <ScrollView style={postStyles.commentsList} showsVerticalScrollIndicator={false}>
+            {item.commentsList && item.commentsList.length > 0 ? (
+              item.commentsList.map(comment => (
+                <View key={comment.id} style={postStyles.commentItem}>
+                  <Avatar uri={comment.avatar} name={comment.author} size={32} theme={theme} />
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <Text style={[postStyles.commentAuthor, { color: theme.text }]}>
+                        {comment.author}
+                      </Text>
+                      <Text style={[postStyles.commentTime, { color: theme.secondaryText }]}>
+                        {comment.timestamp}
+                      </Text>
+                    </View>
+                    <Text style={[postStyles.commentText, { color: theme.text }]}>
+                      {comment.text}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Text style={[postStyles.noComments, { color: theme.secondaryText }]}>No comments yet. Be the first!</Text>
+            )}
+          </ScrollView>
+
+          {/* Comment Input */}
+          <View style={[postStyles.commentInput, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
+            <TextInput
+              style={[postStyles.commentField, { color: theme.text, backgroundColor: theme.background }]}
+              placeholder="Add a comment..."
+              placeholderTextColor={theme.secondaryText}
+              value={commentText}
+              onChangeText={setCommentText}
+              multiline
+            />
+            <TouchableOpacity
+              onPress={handleAddComment}
+              disabled={!commentText.trim()}
+              style={postStyles.commentSendBtn}
+            >
+              <Ionicons
+                name="send"
+                size={18}
+                color={commentText.trim() ? theme.primary : theme.secondaryText}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -149,6 +226,16 @@ const postStyles = StyleSheet.create({
   actions:     { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 10, borderTopWidth: 0.5, gap: 0 },
   actionBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
   actionCount: { fontSize: 12, fontWeight: '500' },
+  commentsSection: { borderTopWidth: 0.5, padding: 14, maxHeight: 300 },
+  commentsList: { maxHeight: 220, marginBottom: 12 },
+  commentItem: { flexDirection: 'row', marginBottom: 14, alignItems: 'flex-start', gap: 10 },
+  commentAuthor: { fontWeight: '700', fontSize: 11, marginBottom: 2 },
+  commentTime: { fontSize: 10, marginTop: 2 },
+  commentText: { fontSize: 12, lineHeight: 16, marginTop: 3 },
+  noComments: { textAlign: 'center', fontSize: 12, paddingVertical: 12 },
+  commentInput: { flexDirection: 'row', alignItems: 'flex-end', borderTopWidth: 0.5, paddingHorizontal: 12, paddingVertical: 10, gap: 10 },
+  commentField: { flex: 1, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 20, fontSize: 12, maxHeight: 100 },
+  commentSendBtn: { paddingHorizontal: 4, paddingVertical: 6 },
 });
 
 const FeedScreen = ({ navigation }) => {
@@ -166,6 +253,12 @@ const FeedScreen = ({ navigation }) => {
   const [posting, setPosting]       = useState(false);
   const [postError, setPostError]   = useState('');
   const [activeTab, setActiveTab]   = useState('feed');
+  const [successModal, setSuccessModal] = useState({ visible: false, message: '' });
+  const [selectedPost, setSelectedPost] = useState(null);
+  const [postMenuVisible, setPostMenuVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editCaption, setEditCaption] = useState('');
+  const [editingPost, setEditingPost] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -213,6 +306,105 @@ const FeedScreen = ({ navigation }) => {
     }
   };
 
+  const handleComment = async (postId, text) => {
+    try {
+      const response = await apiAddComment(postId, text);
+      setPosts(prev => prev.map(p =>
+        p.id === postId
+          ? {
+              ...p,
+              comments: (p.comments || 0) + 1,
+              commentsList: Array.isArray(response)
+                ? response
+                : [
+                    ...(Array.isArray(p.commentsList) ? p.commentsList : []),
+                    ...(response?.text
+                      ? [{
+                          id: response.id || `c_${Date.now()}`,
+                          author: response.author || 'You',
+                          username: response.username,
+                          avatar: response.avatar,
+                          text: response.text,
+                          timestamp: response.timestamp || 'Just now',
+                        }]
+                      : []),
+                  ],
+            }
+          : p
+      ));
+      setSuccessModal({ visible: true, message: 'Comment added!' });
+      setTimeout(() => setSuccessModal({ visible: false, message: '' }), 2000);
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Failed to add comment');
+    }
+  };
+
+  const handleSave = async (postId) => {
+    try {
+      await apiToggleSavePost(postId);
+      setPosts(prev => prev.map(p =>
+        p.id === postId ? { ...p, saved: !p.saved } : p
+      ));
+      setSuccessModal({ visible: true, message: 'Post saved!' });
+      setTimeout(() => setSuccessModal({ visible: false, message: '' }), 2000);
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Failed to save post');
+    }
+  };
+
+  const handleOpenPostOptions = (post) => {
+    if (!post?.isOwn) return;
+    setSelectedPost(post);
+    setPostMenuVisible(true);
+  };
+
+  const handleStartEditPost = () => {
+    if (!selectedPost) return;
+    setEditCaption(selectedPost.caption || '');
+    setPostMenuVisible(false);
+    setEditModalVisible(true);
+  };
+
+  const handleConfirmEditPost = async () => {
+    if (!selectedPost) return;
+    try {
+      setEditingPost(true);
+      const updated = await apiUpdatePost(selectedPost.id, { caption: editCaption.trim() });
+      setPosts((prev) => prev.map((p) => (p.id === selectedPost.id ? { ...p, ...(updated || {}), caption: editCaption.trim() } : p)));
+      setEditModalVisible(false);
+      setSelectedPost(null);
+      setSuccessModal({ visible: true, message: 'Post updated!' });
+      setTimeout(() => setSuccessModal({ visible: false, message: '' }), 2000);
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Failed to update post');
+    } finally {
+      setEditingPost(false);
+    }
+  };
+
+  const handleDeleteSelectedPost = async () => {
+    if (!selectedPost) return;
+    setPostMenuVisible(false);
+    Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiDeletePost(selectedPost.id);
+            setPosts((prev) => prev.filter((p) => p.id !== selectedPost.id));
+            setSelectedPost(null);
+            setSuccessModal({ visible: true, message: 'Post deleted!' });
+            setTimeout(() => setSuccessModal({ visible: false, message: '' }), 2000);
+          } catch (err) {
+            Alert.alert('Error', err.message || 'Failed to delete post');
+          }
+        },
+      },
+    ]);
+  };
+
   const pickImages = () => {
     launchImageLibrary({ selectionLimit: 5, mediaType: 'photo', quality: 0.85 }, (res) => {
       if (res.assets?.length) setSelImages(res.assets.map(a => a.uri));
@@ -236,7 +428,8 @@ const FeedScreen = ({ navigation }) => {
       setModal(false);
       setSelImages([]);
       setCaption('');
-      Alert.alert('Success', 'Your post has been shared with the community!', [{ text: 'OK' }]);
+      setSuccessModal({ visible: true, message: 'Post published!' });
+      setTimeout(() => setSuccessModal({ visible: false, message: '' }), 2000);
     } catch (err) {
       setPostError(err.message || 'Failed to post. Please try again.');
     } finally {
@@ -340,12 +533,57 @@ const FeedScreen = ({ navigation }) => {
         <FlatList
           data={feedData.filter(item => item && item.id)}
           keyExtractor={(item, index) => item?.id ? String(item.id) : String(index)}
-          renderItem={({ item }) => item ? <PostCard item={item} theme={theme} onLike={handleLike} /> : null}
+          renderItem={({ item }) => item ? <PostCard item={item} theme={theme} onLike={handleLike} onComment={handleComment} onSave={handleSave} onOptions={handleOpenPostOptions} /> : null}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: 12, paddingBottom: 120, paddingHorizontal: 16 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         />
       )}
+
+      <Modal visible={postMenuVisible} transparent animationType="fade" onRequestClose={() => setPostMenuVisible(false)}>
+        <TouchableOpacity style={styles.optionsBackdrop} activeOpacity={1} onPress={() => setPostMenuVisible(false)}>
+          <View style={[styles.optionsMenu, { backgroundColor: theme.card, borderColor: theme.border }]}> 
+            <TouchableOpacity style={styles.optionsRow} onPress={handleStartEditPost}>
+              <Ionicons name="create-outline" size={18} color={theme.text} />
+              <Text style={[styles.optionsText, { color: theme.text }]}>Edit Post</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionsRow} onPress={handleDeleteSelectedPost}>
+              <Ionicons name="trash-outline" size={18} color="#FF4B4B" />
+              <Text style={[styles.optionsText, { color: '#FF4B4B' }]}>Delete Post</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={editModalVisible} transparent animationType="slide" onRequestClose={() => !editingPost && setEditModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.editModalBox, { backgroundColor: theme.background, borderColor: theme.border }]}> 
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}> 
+              <TouchableOpacity onPress={() => !editingPost && setEditModalVisible(false)}>
+                <Ionicons name="close" size={22} color={theme.text} />
+              </TouchableOpacity>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Edit Post</Text>
+              <TouchableOpacity
+                onPress={handleConfirmEditPost}
+                disabled={editingPost}
+                style={[styles.shareBtn, { backgroundColor: theme.primary, opacity: editingPost ? 0.7 : 1 }]}
+              >
+                {editingPost ? <ActivityIndicator size="small" color="#141414" /> : <Text style={styles.shareBtnText}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding: 16 }}>
+              <TextInput
+                style={[styles.captionInput, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]}
+                placeholder="Update your caption..."
+                placeholderTextColor={theme.secondaryText}
+                multiline
+                value={editCaption}
+                onChangeText={setEditCaption}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Create Post Modal */}
       <Modal visible={modal} animationType="slide" transparent onRequestClose={() => !posting && setModal(false)}>
@@ -437,6 +675,16 @@ const FeedScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Success Modal */}
+      <ThemedStatusModal
+        visible={successModal.visible}
+        title="Success"
+        message={successModal.message}
+        icon="checkmark-circle"
+        actionText="Done"
+        onAction={() => setSuccessModal({ visible: false, message: '' })}
+      />
     </SafeAreaView>
   );
 };
@@ -466,6 +714,11 @@ const styles = StyleSheet.create({
   postBtnText:        { color: '#141414', fontWeight: '700', fontSize: 14 },
   modalOverlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   modalBox:           { borderTopLeftRadius: 24, borderTopRightRadius: 24, flex: 1, marginTop: 'auto', maxHeight: '90%' },
+  editModalBox:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: 'auto', borderWidth: 1 },
+  optionsBackdrop:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingTop: 140, paddingRight: 20 },
+  optionsMenu:        { width: 180, borderRadius: 14, borderWidth: 1, paddingVertical: 6 },
+  optionsRow:         { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
+  optionsText:        { fontSize: 14, fontWeight: '600' },
   modalHeader:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 0.5 },
   modalTitle:         { fontSize: 16, fontWeight: '700' },
   shareBtn:           { paddingHorizontal: 18, paddingVertical: 6, borderRadius: 50, minWidth: 56, alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 1 }, shadowRadius: 3 },
