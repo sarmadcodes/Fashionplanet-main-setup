@@ -10,13 +10,9 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchFeedPosts, apiToggleLike, apiCreatePost, apiAddComment, apiToggleSavePost, apiUpdatePost, apiDeletePost } from '../services/mockApi';
+import { CommonSkeleton, EmptyState, ErrorState, ScreenHeader } from '../components/common';
+import { apiFetchFeedPosts, apiToggleLike, apiCreatePost, apiAddComment, apiToggleSavePost, apiUpdatePost, apiDeletePost } from '../services/apiService';
 import ThemedStatusModal from '../components/ThemedStatusModal';
-
-const Skeleton = ({ style }) => {
-  const { isDark } = useTheme();
-  return <View style={[{ backgroundColor: isDark ? '#1F1F1F' : '#ECECEC', borderRadius: 12 }, style]} />;
-};
 
 // Professional Avatar with initials
 const Avatar = ({ uri, name, size = 40, theme }) => {
@@ -444,23 +440,18 @@ const FeedScreen = ({ navigation }) => {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.background} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: theme.text }]}>Feed</Text>
-          <Text style={[styles.sub, { color: theme.secondaryText }]}>
-            {posts.length} {posts.length === 1 ? 'post' : 'posts'}
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={[styles.newPostBtn, { backgroundColor: theme.primary }]}
-          onPress={() => setModal(true)}
-          activeOpacity={0.75}
-        >
-          <Ionicons name="add" size={18} color="#141414" />
-          <Text style={styles.newPostText}>Post</Text>
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        theme={theme}
+        title="Feed"
+        subtitle={`${posts.length} ${posts.length === 1 ? 'post' : 'posts'}`}
+        rightIcon="add"
+        rightLabel="Post"
+        onRightPress={() => setModal(true)}
+        containerStyle={styles.header}
+        titleStyle={styles.title}
+        subtitleStyle={styles.sub}
+        rightButtonStyle={[styles.newPostBtn, { backgroundColor: theme.primary }]}
+      />
 
       {/* Tabs */}
       <View style={[styles.tabs, { borderBottomColor: theme.border }]}>
@@ -489,14 +480,14 @@ const FeedScreen = ({ navigation }) => {
           {[1, 2].map(i => (
             <View key={i} style={[styles.skeletonCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 }}>
-                <Skeleton style={{ width: 44, height: 44, borderRadius: 22 }} />
+                <CommonSkeleton style={{ width: 44, height: 44, borderRadius: 22 }} />
                 <View style={{ gap: 6, flex: 1 }}>
-                  <Skeleton style={{ width: '60%', height: 12 }} />
-                  <Skeleton style={{ width: '40%', height: 10 }} />
+                  <CommonSkeleton style={{ width: '60%', height: 12 }} />
+                  <CommonSkeleton style={{ width: '40%', height: 10 }} />
                 </View>
               </View>
-              <Skeleton style={{ width: skeletonImageWidth, height: skeletonImageWidth * 0.75, marginHorizontal: 16, borderRadius: 12, marginBottom: 14 }} />
-              <Skeleton style={{ width: '70%', height: 12, marginHorizontal: 14, marginBottom: 14 }} />
+              <CommonSkeleton style={{ width: skeletonImageWidth, height: skeletonImageWidth * 0.75, marginHorizontal: 16, borderRadius: 12, marginBottom: 14 }} />
+              <CommonSkeleton style={{ width: '70%', height: 12, marginHorizontal: 14, marginBottom: 14 }} />
             </View>
           ))}
         </ScrollView>
@@ -505,29 +496,30 @@ const FeedScreen = ({ navigation }) => {
           contentContainerStyle={styles.errorContainer}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         >
-          <Ionicons name="warning-outline" size={52} color={theme.secondaryText} />
-          <Text style={[styles.errorTitle, { color: theme.text }]}>Unable to Load Feed</Text>
-          <Text style={[styles.errorMsg, { color: theme.secondaryText }]}>{postError}</Text>
-          <TouchableOpacity
-            style={[styles.retryBtn, { backgroundColor: theme.primary }]}
-            onPress={loadFeed}
-          >
-            <Text style={styles.retryBtnText}>Try Again</Text>
-          </TouchableOpacity>
+          <ErrorState
+            theme={theme}
+            icon="warning-outline"
+            title="Unable to Load Feed"
+            message={postError}
+            retryLabel="Try Again"
+            onRetry={loadFeed}
+            containerStyle={styles.errorContainer}
+          />
         </ScrollView>
       ) : feedData.length === 0 && activeTab === 'mine' ? (
         <ScrollView
           contentContainerStyle={styles.emptyContainer}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         >
-          <Ionicons name="image" size={52} color={theme.secondaryText} />
-          <Text style={[styles.emptyTitle, { color: theme.text }]}>No Posts Yet</Text>
-          <Text style={[styles.emptySub, { color: theme.secondaryText }]}>
-            Share your first outfit with the community
-          </Text>
-          <TouchableOpacity style={[styles.postBtn, { backgroundColor: theme.primary }]} onPress={() => setModal(true)}>
-            <Text style={styles.postBtnText}>Create Post</Text>
-          </TouchableOpacity>
+          <EmptyState
+            theme={theme}
+            icon="image"
+            title="No Posts Yet"
+            description="Share your first outfit with the community"
+            actionLabel="Create Post"
+            onAction={() => setModal(true)}
+            containerStyle={styles.emptyContainer}
+          />
         </ScrollView>
       ) : (
         <FlatList
@@ -702,16 +694,8 @@ const styles = StyleSheet.create({
   tab:                { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabText:            { fontSize: 14, fontWeight: '600' },
   skeletonCard:       { marginHorizontal: 16, marginBottom: 16, borderRadius: 16, borderWidth: 0.5, overflow: 'hidden' },
-  errorContainer:     { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 30, paddingBottom: 100 },
-  errorTitle:         { fontSize: 18, fontWeight: '700', marginTop: 12 },
-  errorMsg:           { fontSize: 14, textAlign: 'center', lineHeight: 20 },
-  retryBtn:           { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 50, marginTop: 8 },
-  retryBtnText:       { color: '#141414', fontWeight: '700', fontSize: 14 },
-  emptyContainer:     { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 30, paddingBottom: 100 },
-  emptyTitle:         { fontSize: 18, fontWeight: '700', marginTop: 12 },
-  emptySub:           { fontSize: 14, textAlign: 'center', lineHeight: 20 },
-  postBtn:            { paddingHorizontal: 28, paddingVertical: 10, borderRadius: 50, marginTop: 16 },
-  postBtnText:        { color: '#141414', fontWeight: '700', fontSize: 14 },
+  errorContainer:     { flex: 1, paddingHorizontal: 30, paddingBottom: 100 },
+  emptyContainer:     { flex: 1, paddingHorizontal: 30, paddingBottom: 100 },
   modalOverlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   modalBox:           { borderTopLeftRadius: 24, borderTopRightRadius: 24, flex: 1, marginTop: 'auto', maxHeight: '90%' },
   editModalBox:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: 'auto', borderWidth: 1 },

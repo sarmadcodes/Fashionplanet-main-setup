@@ -1,6 +1,5 @@
 import Ionicons from '@react-native-vector-icons/ionicons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,17 +9,64 @@ import {
   ScrollView,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { darkTheme, lightTheme } from '../theme/colors';
+import { apiDeleteAccount } from '../services/apiService';
 
 const SettingsScreen = ({ navigation }) => {
   // Get global dark/light mode
   const { isDark, toggleTheme } = useTheme();
   const { logout } = useAuth();
   const theme = isDark ? darkTheme : lightTheme;
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const performDeleteAccount = async () => {
+    if (deletingAccount) return;
+
+    try {
+      setDeletingAccount(true);
+      await apiDeleteAccount();
+
+      try {
+        await logout();
+      } finally {
+        Alert.alert('Account deleted', 'Your account has been permanently deleted.', [
+          {
+            text: 'OK',
+            onPress: () => navigation.reset({ index: 0, routes: [{ name: 'LoginScreen' }] }),
+          },
+        ]);
+      }
+    } catch (error) {
+      Alert.alert(
+        'Delete failed',
+        error?.message || 'We could not delete your account right now. Please try again.'
+      );
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
+  const confirmDeleteAccount = () => {
+    if (deletingAccount) return;
+
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: performDeleteAccount,
+        },
+      ]
+    );
+  };
 
   /* -------- Reusable Setting Item -------- */
   const SettingItem = ({
@@ -174,37 +220,17 @@ const SettingsScreen = ({ navigation }) => {
         {/* Delete Account */}
         <TouchableOpacity
           style={styles.deleteButton}
-          onPress={() => {
-            Alert.alert(
-              'Delete Account',
-              'Are you sure you want to delete your account? This action cannot be undone.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete',
-                  style: 'destructive',
-                  onPress: async () => {
-                    await AsyncStorage.multiRemove([
-                      'is_logged_in',
-                      'user_session',
-                      'auth_token',
-                      'app_theme',
-                      'account_visibility',
-                      'bg_setting',
-                      'notification_prefs',
-                      'privacy_prefs',
-                    ]);
-                    navigation.replace('LoginScreen');
-                  },
-                },
-              ]
-            );
-          }}
+          onPress={confirmDeleteAccount}
+          disabled={deletingAccount}
         >
           <View style={[styles.deleteIconBox, { backgroundColor: "red" }]}>
-            <Ionicons name="trash" size={18} color='#000' />
+            {deletingAccount ? (
+              <ActivityIndicator size="small" color="#000" />
+            ) : (
+              <Ionicons name="trash" size={18} color='#000' />
+            )}
           </View>
-          <Text style={[styles.deleteText, { color:'red' }]}>Delete Account</Text>
+          <Text style={[styles.deleteText, { color:'red' }]}>{deletingAccount ? 'Deleting Account...' : 'Delete Account'}</Text>
         </TouchableOpacity>
 
         {/* Footer */}

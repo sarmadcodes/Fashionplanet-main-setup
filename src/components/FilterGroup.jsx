@@ -7,13 +7,20 @@ const GAP = 8;
 const PADDING = 12;
 const BUTTON_WIDTH = (width - PADDING * 2 - GAP * 3) / 4;
 
-const FilterGroup = ({ items }) => {
+const FilterGroup = ({ items, onSelect, activeFilter }) => {
   const { isDark } = useTheme();
 
   // Only one selected ID at a time
   const [selectedId, setSelectedId] = useState(null);
+  const isControlled = typeof onSelect === 'function';
 
-  const selectFilter = (id) => {
+  const selectFilter = (item) => {
+    if (isControlled) {
+      onSelect(item);
+      return;
+    }
+
+    const id = item?.id;
     if (selectedId === id) {
       setSelectedId(null);
     } else {
@@ -31,14 +38,14 @@ const FilterGroup = ({ items }) => {
 
   return (
     <View style={styles.container}>
-      {items.map((item) => {
-        const isActive = selectedId === item.id;
+      {items.map((item, index) => {
+        const isActive = isControlled ? activeFilter === item.name : selectedId === item.id;
 
         return (
           <TouchableOpacity
-            key={item.id}
+            key={`${String(item?.id ?? 'no_id')}_${String(item?.name ?? 'no_name')}_${index}`}
             activeOpacity={0.7}
-            onPress={() => selectFilter(item.id)}
+            onPress={() => selectFilter(item)}
             style={[
               styles.button,
               {

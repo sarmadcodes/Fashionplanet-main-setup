@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
-import { apiAddWeekPlanItem, apiFetchWeekPlan, apiToggleWeekPlanItem } from '../services/mockApi';
+import { apiAddWeekPlanItem, apiFetchWeekPlan, apiToggleWeekPlanItem } from '../services/apiService';
 
 const WeekPlanScreen = ({ navigation }) => {
   const { isDark } = useTheme(); // ✅ use correct value from context

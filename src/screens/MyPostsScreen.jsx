@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
-import { apiFetchMyPosts } from '../services/mockApi';
+import { apiFetchMyPosts } from '../services/apiService';
 
 const MyPostsScreen = ({ navigation }) => {
   const { width } = useWindowDimensions();

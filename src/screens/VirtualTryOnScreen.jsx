@@ -9,16 +9,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
+import { VIRTUAL_TRYON_OUTFITS } from '../config/uiOptions';
 
-// ── Unique men's fashion images — no repeats ──────────────────
-const TRYON_OUTFITS = [
-  { id: 't1', label: 'Smart Casual',   image: 'https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 't2', label: 'Power Suit',     image: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 't3', label: 'Street Style',   image: 'https://images.pexels.com/photos/2896840/pexels-photo-2896840.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 't4', label: 'Weekend Casual', image: 'https://images.pexels.com/photos/4349759/pexels-photo-4349759.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 't5', label: 'Business Look',  image: 'https://images.pexels.com/photos/3760263/pexels-photo-3760263.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 't6', label: 'Winter Layer',   image: 'https://images.pexels.com/photos/8532616/pexels-photo-8532616.jpeg?auto=compress&cs=tinysrgb&w=800' },
-];
+const TRYON_OUTFITS = VIRTUAL_TRYON_OUTFITS;
 
 // ── Shimmer — high contrast visible pulse ─────────────────────
 const ShimmerBox = ({ w, h, r = 10, style }) => {

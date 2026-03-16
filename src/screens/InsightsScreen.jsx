@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, ScrollView, StatusBar, TouchableOpacity, useWin
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
-import { apiFetchInsights } from '../services/mockApi';
+import { apiFetchInsights } from '../services/apiService';
 
 const SkeletonBox = ({ w, height, borderRadius = 10, style }) => {
   const { isDark } = useTheme();

@@ -7,7 +7,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
-import { apiSignup } from '../services/mockApi';
+import { apiSignup } from '../services/apiService';
 import ThemedStatusModal from '../components/ThemedStatusModal';
 
 const SignupScreen = ({ navigation }) => {

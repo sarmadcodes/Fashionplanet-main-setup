@@ -44,9 +44,15 @@ const App = () => {
     const bootstrap = async () => {
       // Initialize store from AsyncStorage before rendering app routes.
       await initializeStore();
-      const val = await AsyncStorage.getItem('is_logged_in');
+      const [isLoggedIn, session, token] = await Promise.all([
+        AsyncStorage.getItem('is_logged_in'),
+        AsyncStorage.getItem('user_session'),
+        AsyncStorage.getItem('auth_token'),
+      ]);
+      const hasValidSession = Boolean(session);
+      const hasLikelyJwt = typeof token === 'string' && /^[^.]+\.[^.]+\.[^.]+$/.test(token);
       if (mounted) {
-        setInitialRoute(val === 'true' ? 'BottomTabs' : 'OnBoardingScreen');
+        setInitialRoute(isLoggedIn === 'true' && hasValidSession && hasLikelyJwt ? 'BottomTabs' : 'OnBoardingScreen');
       }
     };
 

@@ -8,53 +8,48 @@ import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import FilterGroup from '../components/FilterGroup';
 import CustomButton from '../components/CustomButton';
+import {
+  CommonSkeleton,
+  EmptyState,
+  ErrorState,
+  ScreenHeader,
+} from '../components/common';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchWardrobeItems, apiDeleteWardrobeItem } from '../services/mockApi';
+import { apiFetchWardrobeItems, apiDeleteWardrobeItem } from '../services/apiService';
 
 // Default categories
 const DEFAULT_CATEGORIES = [
-  { id: 1, name: 'All' },
-  { id: 2, name: 'Tops' },
-  { id: 3, name: 'Bottoms' },
-  { id: 4, name: 'Outerwear' },
-  { id: 5, name: 'Dresses' },
-  { id: 6, name: 'Shoes' },
-  { id: 7, name: 'Accessories' },
+  { id: 'default_all', name: 'All' },
+  { id: 'default_tops', name: 'Tops' },
+  { id: 'default_bottoms', name: 'Bottoms' },
+  { id: 'default_outerwear', name: 'Outerwear' },
+  { id: 'default_dresses', name: 'Dresses' },
+  { id: 'default_shoes', name: 'Shoes' },
+  { id: 'default_accessories', name: 'Accessories' },
 ];
 
-const Skeleton = ({ style }) => {
-  const { isDark } = useTheme();
-  return (
-    <View style={[{ backgroundColor: isDark ? '#1F1F1F' : '#ECECEC', borderRadius: 12 }, style]} />
-  );
+const buildWardrobeCategories = (items) => {
+  const defaultNames = new Set(DEFAULT_CATEGORIES.map((c) => c.name));
+  const seenCustom = new Set();
+  const customCategories = [];
+
+  (items || []).forEach((item) => {
+    const rawName = item?.category;
+    if (!rawName || defaultNames.has(rawName) || seenCustom.has(rawName)) return;
+    seenCustom.add(rawName);
+    customCategories.push(rawName);
+  });
+
+  return [
+    ...DEFAULT_CATEGORIES,
+    ...customCategories.map((cat, idx) => ({
+      id: `custom_${String(cat).toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${idx}`,
+      name: cat,
+    })),
+  ];
 };
 
-// Empty state with professional design
-const EmptyWardrobe = ({ theme, onAdd }) => (
-  <View style={emptyStyles.wrap}>
-    <View style={[emptyStyles.iconBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
-      <Ionicons name="shirt" size={52} color={theme.secondaryText} />
-    </View>
-    <Text style={[emptyStyles.title, { color: theme.text }]}>Your wardrobe is empty</Text>
-    <Text style={[emptyStyles.sub, { color: theme.secondaryText }]}>
-      Start building your digital closet by adding your first piece.
-    </Text>
-    <TouchableOpacity style={[emptyStyles.btn, { backgroundColor: theme.primary }]} onPress={onAdd} activeOpacity={0.75}>
-      <Ionicons name="add" size={18} color="#141414" style={{ marginRight: 6 }} />
-      <Text style={emptyStyles.btnText}>Add your first item</Text>
-    </TouchableOpacity>
-  </View>
-);
-
-const emptyStyles = StyleSheet.create({
-  wrap:    { alignItems: 'center', paddingTop: 80, paddingHorizontal: 30 },
-  iconBox: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 24, borderWidth: 1 },
-  title:   { fontSize: 20, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
-  sub:     { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 28, fontWeight: '500' },
-  btn:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 50, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4 },
-  btnText: { color: '#141414', fontWeight: '700', fontSize: 14 },
-});
 
 // Wardrobe card with delete functionality
 const WardrobeCard = ({ item, theme, onPress, onEdit, onDelete, cardWidth }) => (
@@ -133,15 +128,7 @@ const WardrobeScreen = ({ navigation }) => {
       setError('');
       const data = await apiFetchWardrobeItems();
       setAllItems(data);
-      
-      // Extract unique categories from items and combine with defaults
-      const itemCategories = [...new Set(data.map(item => item.category).filter(Boolean))];
-      const allCategories = itemCategories.filter(cat => !DEFAULT_CATEGORIES.some(def => def.name === cat));
-      const finalCategories = [
-        ...DEFAULT_CATEGORIES,
-        ...allCategories.map((cat, idx) => ({ id: DEFAULT_CATEGORIES.length + idx, name: cat }))
-      ];
-      setCategories(finalCategories);
+      setCategories(buildWardrobeCategories(data));
       
       applyFilter(data, 'All');
     } catch (err) {
@@ -157,15 +144,7 @@ const WardrobeScreen = ({ navigation }) => {
       setError('');
       const data = await apiFetchWardrobeItems();
       setAllItems(data);
-      
-      // Extract unique categories from items and combine with defaults
-      const itemCategories = [...new Set(data.map(item => item.category).filter(Boolean))];
-      const allCategories = itemCategories.filter(cat => !DEFAULT_CATEGORIES.some(def => def.name === cat));
-      const finalCategories = [
-        ...DEFAULT_CATEGORIES,
-        ...allCategories.map((cat, idx) => ({ id: DEFAULT_CATEGORIES.length + idx, name: cat }))
-      ];
-      setCategories(finalCategories);
+      setCategories(buildWardrobeCategories(data));
       
       applyFilter(data, activeFilter);
     } catch {
@@ -220,22 +199,17 @@ const WardrobeScreen = ({ navigation }) => {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
       >
         <View style={{ paddingBottom: 110 }}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View>
-              <Text style={[styles.title, { color: theme.text }]}>My Wardrobe</Text>
-              <Text style={[styles.sub, { color: theme.secondaryText }]}>
-                {loading ? 'Loading...' : `${allItems.length} item${allItems.length !== 1 ? 's' : ''}`}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.addBtn, { backgroundColor: theme.primary }]}
-              onPress={() => navigation.navigate('AddItemsScreen')}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="add" size={20} color="#141414" />
-            </TouchableOpacity>
-          </View>
+          <ScreenHeader
+            theme={theme}
+            title="My Wardrobe"
+            subtitle={loading ? 'Loading...' : `${allItems.length} item${allItems.length !== 1 ? 's' : ''}`}
+            rightIcon="add"
+            onRightPress={() => navigation.navigate('AddItemsScreen')}
+            containerStyle={styles.header}
+            titleStyle={styles.title}
+            subtitleStyle={styles.sub}
+            rightButtonStyle={[styles.addBtn, { backgroundColor: theme.primary }]}
+          />
 
           {/* Filters */}
           <FilterGroup
@@ -251,28 +225,38 @@ const WardrobeScreen = ({ navigation }) => {
               {[1, 2].map((row) => (
                 <View key={row} style={styles.gridRow}>
                   {[1, 2, 3].map(i => (
-                      <Skeleton key={i} style={{ width: cardWidth, height: cardWidth / 0.85 + 36, marginBottom: 18 }} />
+                      <CommonSkeleton key={i} style={{ width: cardWidth, height: cardWidth / 0.85 + 36, marginBottom: 18 }} borderRadius={12} />
                   ))}
                 </View>
               ))}
             </View>
           ) : error && allItems.length === 0 ? (
-            <View style={styles.errorState}>
-              <Ionicons name="alert-circle-outline" size={48} color={theme.secondaryText} />
-              <Text style={[styles.errorTitle, { color: theme.text }]}>{error}</Text>
-              <TouchableOpacity style={[styles.retryBtn, { backgroundColor: theme.primary }]} onPress={load}>
-                <Text style={styles.retryText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
+            <ErrorState
+              theme={theme}
+              title="Unable to Load Wardrobe"
+              message={error}
+              onRetry={load}
+              containerStyle={styles.errorState}
+            />
           ) : allItems.length === 0 ? (
-            <EmptyWardrobe theme={theme} onAdd={() => navigation.navigate('AddItemsScreen')} />
+            <EmptyState
+              theme={theme}
+              icon="shirt"
+              title="Your wardrobe is empty"
+              description="Start building your digital closet by adding your first piece."
+              actionLabel="Add your first item"
+              onAction={() => navigation.navigate('AddItemsScreen')}
+              containerStyle={{ paddingTop: 80 }}
+              iconWrapStyle={{ width: 100, height: 100, borderRadius: 50 }}
+            />
           ) : displayed.length === 0 ? (
-            <View style={styles.emptyFilter}>
-              <Ionicons name="funnel-outline" size={40} color={theme.secondaryText} />
-              <Text style={[styles.emptyFilterText, { color: theme.secondaryText }]}>
-                No items in this category
-              </Text>
-            </View>
+            <EmptyState
+              theme={theme}
+              icon="funnel-outline"
+              title="No items in this category"
+              description="Try another filter or add a new wardrobe item."
+              containerStyle={styles.emptyFilter}
+            />
           ) : (
             rows.map((row, ri) => (
               <View key={ri} style={styles.gridRow}>
@@ -325,7 +309,7 @@ const styles = StyleSheet.create({
   header:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 4 },
   title:           { fontSize: 28, fontWeight: '700' },
   sub:             { fontSize: 13, marginTop: 3, fontWeight: '500' },
-  addBtn:          { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4 },
+  addBtn:          { borderRadius: 12, justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4 },
   gridRow:         { flexDirection: 'row', justifyContent: 'space-between' },
   emptyFilter:     { alignItems: 'center', paddingTop: 80, gap: 14 },
   emptyFilterText: { fontSize: 15, fontWeight: '600' },

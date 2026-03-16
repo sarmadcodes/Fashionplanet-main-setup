@@ -9,16 +9,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
+import { STYLE_AVATAR_TYPES } from '../config/uiOptions';
 
-// Each style type has its own dedicated men's fashion image — unique, not used in any other file
-const STYLE_TYPES = [
-  { id: 1, label: 'Minimalist', icon: 'remove-outline',    color: '#888',    image: 'https://images.pexels.com/photos/1040945/pexels-photo-1040945.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 2, label: 'Streetwear', icon: 'flame-outline',     color: '#FF6B6B', image: 'https://images.pexels.com/photos/1656684/pexels-photo-1656684.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 3, label: 'Business',   icon: 'briefcase-outline', color: '#4A90E2', image: 'https://images.pexels.com/photos/1893590/pexels-photo-1893590.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 4, label: 'Bohemian',   icon: 'leaf-outline',      color: '#7CB77C', image: 'https://images.pexels.com/photos/428338/pexels-photo-428338.jpeg?auto=compress&cs=tinysrgb&w=800'   },
-  { id: 5, label: 'Vintage',    icon: 'time-outline',      color: '#C4985F', image: 'https://images.pexels.com/photos/1124465/pexels-photo-1124465.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 6, label: 'Athleisure', icon: 'fitness-outline',   color: '#9B59B6', image: 'https://images.pexels.com/photos/1040881/pexels-photo-1040881.jpeg?auto=compress&cs=tinysrgb&w=800' },
-];
+const STYLE_TYPES = STYLE_AVATAR_TYPES;
 
 // ── Shimmer — high contrast visible pulse ─────────────────────
 const ShimmerBox = ({ w, h, r = 10, style }) => {

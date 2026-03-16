@@ -8,22 +8,16 @@ import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import QuickactionCard from '../components/cards/QuickactionCard';
 import StyleCard from '../components/cards/StyleCard';
+import {
+  CommonSkeleton,
+  EmptyState,
+  ErrorState,
+  ScreenHeader,
+  SectionHeader,
+} from '../components/common';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchWardrobeItems, apiFetchHomeData } from '../services/mockApi';
-
-// ─── Skeleton ────────────────────────────────────────────────────────────────
-const Skeleton = ({ w, h, r = 10, style }) => {
-  const { isDark } = useTheme();
-  return (
-    <View
-      style={[
-        { width: w, height: h, borderRadius: r, backgroundColor: isDark ? '#1F1F1F' : '#ECECEC' },
-        style,
-      ]}
-    />
-  );
-};
+import { apiFetchWardrobeItems, apiFetchHomeData } from '../services/apiService';
 
 // ─── Weather Banner ───────────────────────────────────────────────────────────
 const WeatherBanner = ({ theme, navigation, weather = 'Sunny', temp = '22°C' }) => (
@@ -150,41 +144,37 @@ const HomeScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
       >
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View>
-              <Text style={[styles.greeting, { color: theme.secondaryText }]}>{homeData.greeting || 'Welcome back'}</Text>
-            <Text style={[styles.pageTitle, { color: theme.text }]}>Your Wardrobe</Text>
-          </View>
-          <TouchableOpacity
-            style={[styles.notifBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
-            onPress={() => navigation.navigate('NotificationsScreen')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="notifications-outline" size={22} color={theme.text} />
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          theme={theme}
+          title="Your Wardrobe"
+          subtitle={homeData.greeting || 'Welcome back'}
+          rightIcon="notifications-outline"
+          onRightPress={() => navigation.navigate('NotificationsScreen')}
+          containerStyle={styles.headerRow}
+          titleStyle={styles.pageTitle}
+          subtitleStyle={styles.greeting}
+        />
 
         {loading ? (
           <View style={{ paddingBottom: 100 }}>
-            <Skeleton w="100%" h={80} r={16} style={{ marginBottom: 24 }} />
-            <Skeleton w={140} h={16} r={6} style={{ marginBottom: 12 }} />
+            <CommonSkeleton width="100%" height={80} borderRadius={16} style={{ marginBottom: 24 }} />
+            <CommonSkeleton width={140} height={16} borderRadius={6} style={{ marginBottom: 12 }} />
             <View style={styles.skeletonRow}>
-              {[1, 2, 3].map(i => <Skeleton key={i} w="30%" h={100} r={12} />)}
+              {[1, 2, 3].map(i => <CommonSkeleton key={i} width="30%" height={100} borderRadius={12} />)}
             </View>
-            <Skeleton w={160} h={16} r={6} style={{ marginBottom: 12, marginTop: 24 }} />
+            <CommonSkeleton width={160} height={16} borderRadius={6} style={{ marginBottom: 12, marginTop: 24 }} />
             <View style={styles.skeletonRow}>
-              {[1, 2, 3].map(i => <Skeleton key={i} w="30%" h={140} r={12} />)}
+              {[1, 2, 3].map(i => <CommonSkeleton key={i} width="30%" height={140} borderRadius={12} />)}
             </View>
           </View>
         ) : error ? (
-          <View style={styles.errorState}>
-            <Ionicons name="alert-circle-outline" size={48} color={theme.secondaryText} />
-            <Text style={[styles.errorTitle, { color: theme.text }]}>{error}</Text>
-            <TouchableOpacity style={[styles.retryBtn, { backgroundColor: theme.primary }]} onPress={load}>
-              <Text style={styles.retryText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
+          <ErrorState
+            theme={theme}
+            title="Unable to Load Home"
+            message={error}
+            onRetry={load}
+            containerStyle={styles.errorState}
+          />
         ) : (
           <Animated.View style={[{ opacity: fadeAnim }, { paddingBottom: 110 }]}>
             {/* Weather Banner */}
@@ -194,33 +184,25 @@ const HomeScreen = ({ navigation }) => {
             <QuickactionCard theme={theme} />
 
             {/* My Wardrobe Section */}
-            <View style={styles.sectionRow}>
-              <View>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>My Wardrobe</Text>
-                <Text style={[styles.sectionSub, { color: theme.secondaryText }]}>
-                  {wardrobeItems.length} item{wardrobeItems.length !== 1 ? 's' : ''}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => navigation.navigate('Wardrobe')} activeOpacity={0.7}>
-                <Text style={[styles.seeAll, { color: theme.primary }]}>See all</Text>
-              </TouchableOpacity>
-            </View>
+            <SectionHeader
+              theme={theme}
+              title="My Wardrobe"
+              subtitle={`${wardrobeItems.length} item${wardrobeItems.length !== 1 ? 's' : ''}`}
+              rightLabel="See all"
+              onRightPress={() => navigation.navigate('Wardrobe')}
+            />
 
             {wardrobeItems.length === 0 ? (
-              <View style={[styles.emptyWardrobeBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <Ionicons name="shirt" size={40} color={theme.secondaryText} />
-                <Text style={[styles.emptyWardrobeTitle, { color: theme.text }]}>Empty Wardrobe</Text>
-                <Text style={[styles.emptyWardrobeSub, { color: theme.secondaryText }]}>
-                  Add your first item to get started
-                </Text>
-                <TouchableOpacity
-                  style={[styles.emptyWardrobeBtn, { backgroundColor: theme.primary }]}
-                  onPress={() => navigation.navigate('AddItemsScreen')}
-                >
-                  <Ionicons name="add" size={16} color="#141414" />
-                  <Text style={styles.emptyWardrobeBtnText}>Add Item</Text>
-                </TouchableOpacity>
-              </View>
+              <EmptyState
+                theme={theme}
+                icon="shirt"
+                title="Empty Wardrobe"
+                description="Add your first item to get started"
+                actionLabel="Add Item"
+                onAction={() => navigation.navigate('AddItemsScreen')}
+                containerStyle={styles.emptyWardrobeBox}
+                iconWrapStyle={{ width: 70, height: 70, borderRadius: 35 }}
+              />
             ) : (
               <StyleCard
                 type="standard"
@@ -231,12 +213,12 @@ const HomeScreen = ({ navigation }) => {
             )}
 
             {/* Recent Outfits Section */}
-            <View style={styles.sectionRow}>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Outfits</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('OutfitsScreen', {})} activeOpacity={0.7}>
-                <Text style={[styles.seeAll, { color: theme.primary }]}>See all</Text>
-              </TouchableOpacity>
-            </View>
+            <SectionHeader
+              theme={theme}
+              title="Recent Outfits"
+              rightLabel="See all"
+              onRightPress={() => navigation.navigate('OutfitsScreen', {})}
+            />
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
               {recentOutfits.map(item => (
@@ -248,11 +230,13 @@ const HomeScreen = ({ navigation }) => {
                 />
               ))}
               {recentOutfits.length === 0 && (
-                <View style={[styles.emptyWardrobeBox, { backgroundColor: theme.card, borderColor: theme.border, width: '100%' }]}>
-                  <Ionicons name="images-outline" size={36} color={theme.secondaryText} />
-                  <Text style={[styles.emptyWardrobeTitle, { color: theme.text }]}>No recent outfits yet</Text>
-                  <Text style={[styles.emptyWardrobeSub, { color: theme.secondaryText }]}>Add wardrobe items to generate your recent looks.</Text>
-                </View>
+                <EmptyState
+                  theme={theme}
+                  icon="images-outline"
+                  title="No recent outfits yet"
+                  description="Add wardrobe items to generate your recent looks."
+                  containerStyle={[styles.emptyWardrobeBox, { width: '100%' }]}
+                />
               )}
             </ScrollView>
 
@@ -280,7 +264,6 @@ const styles = StyleSheet.create({
   headerRow:            { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 16 },
   greeting:             { fontSize: 13, fontWeight: '500' },
   pageTitle:            { fontSize: 28, fontWeight: '700', marginTop: 4 },
-  notifBtn:             { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 1 }, shadowRadius: 2 },
   sectionRow:           { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 8 },
   sectionTitle:         { fontSize: 18, fontWeight: '700' },
   sectionSub:           { fontSize: 12, marginTop: 2, fontWeight: '500' },

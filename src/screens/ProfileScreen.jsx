@@ -10,7 +10,7 @@ import CustomButton from '../components/CustomButton';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchOutfits, apiFetchProfile, apiFetchSavedPosts } from '../services/mockApi';
+import { apiFetchOutfits, apiFetchProfile, apiFetchSavedPosts } from '../services/apiService';
 import { getSavedPosts } from '../services/appStore';
 
 // ─── Skeleton ─────────────────────────────────────────────────

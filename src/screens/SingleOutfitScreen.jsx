@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,43 +7,14 @@ import {
   ScrollView,
   StatusBar,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-
-// ── Related outfits — remote URLs instead of local assets ────
-const MORE_OUTFITS = [
-  {
-    id: 'm1',
-    title: 'Monochrome',
-    brand: 'Zara',
-    category: 'Casual',
-    color: 'Black',
-    season: 'All Season',
-    image: 'https://images.pexels.com/photos/1536619/pexels-photo-1536619.jpeg',
-  },
-  {
-    id: 'm2',
-    title: 'Spring Edit',
-    brand: 'Mango',
-    category: 'Smart Casual',
-    color: 'Beige',
-    season: 'Spring',
-    image: 'https://images.pexels.com/photos/1183266/pexels-photo-1183266.jpeg',
-  },
-  {
-    id: 'm3',
-    title: 'Vintage',
-    brand: 'Thrifted',
-    category: 'Vintage',
-    color: 'Brown',
-    season: 'Winter',
-    image: 'https://images.pexels.com/photos/3622608/pexels-photo-3622608.jpeg',
-  },
-];
+import { apiFetchOutfits } from '../services/apiService';
 
 // ─── Detail chip ──────────────────────────────────────────────
 const InfoChip = ({ icon, label, value, theme }) => (
@@ -96,6 +67,60 @@ const SingleOutfitScreen = () => {
   const theme      = isDark ? darkTheme : lightTheme;
 
   const { image, name, brand, category, color, season } = route.params || {};
+  const [relatedOutfits, setRelatedOutfits] = useState([]);
+  const [relatedLoading, setRelatedLoading] = useState(true);
+
+  const relatedSeed = useMemo(
+    () => `${String(name || '')}|${String(category || '')}|${String(season || '')}`,
+    [name, category, season]
+  );
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadRelated = async () => {
+      try {
+        setRelatedLoading(true);
+        const outfits = await apiFetchOutfits();
+        const normalized = Array.isArray(outfits) ? outfits : [];
+
+        const candidates = normalized.filter((item) => {
+          const sameById = route?.params?.id && item?.id && String(item.id) === String(route.params.id);
+          const sameByIdentity = String(item?.title || '') === String(name || '') && String(item?.image || '') === String(image || '');
+          if (sameById || sameByIdentity) return false;
+
+          if (category && item?.category === category) return true;
+          if (season && item?.season === season) return true;
+          return false;
+        });
+
+        const fallback = normalized.filter((item) => {
+          const sameById = route?.params?.id && item?.id && String(item.id) === String(route.params.id);
+          const sameByIdentity = String(item?.title || '') === String(name || '') && String(item?.image || '') === String(image || '');
+          return !sameById && !sameByIdentity;
+        });
+
+        const finalList = (candidates.length > 0 ? candidates : fallback).slice(0, 8);
+        if (mounted) {
+          setRelatedOutfits(finalList);
+        }
+      } catch {
+        if (mounted) {
+          setRelatedOutfits([]);
+        }
+      } finally {
+        if (mounted) {
+          setRelatedLoading(false);
+        }
+      }
+    };
+
+    loadRelated();
+
+    return () => {
+      mounted = false;
+    };
+  }, [image, name, category, season, relatedSeed, route?.params?.id]);
 
   const handleRelatedPress = (item) => {
     navigation.push('SingleOutfitScreen', {
@@ -168,16 +193,32 @@ const SingleOutfitScreen = () => {
           </View>
 
           <Text style={[styles.moreTitle, { color: theme.text }]}>More Outfits</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {MORE_OUTFITS.map(item => (
-              <RelatedCard
-                key={item.id}
-                item={item}
-                theme={theme}
-                onPress={handleRelatedPress}
-              />
-            ))}
-          </ScrollView>
+          {relatedLoading ? (
+            <View style={[styles.relatedLoadingBox, { borderColor: theme.border, backgroundColor: theme.card }]}>
+              <ActivityIndicator size="small" color={theme.primary} />
+              <Text style={[styles.relatedLoadingText, { color: theme.secondaryText }]}>Loading related outfits...</Text>
+            </View>
+          ) : relatedOutfits.length === 0 ? (
+            <View style={[styles.relatedEmptyBox, { borderColor: theme.border, backgroundColor: theme.card }]}>
+              <Ionicons name="shirt-outline" size={16} color={theme.secondaryText} />
+              <Text style={[styles.relatedEmptyText, { color: theme.secondaryText }]}>No related outfits available.</Text>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {relatedOutfits.map((item, index) => (
+                <RelatedCard
+                  key={`${String(item?.id || 'related')}_${index}`}
+                  item={{
+                    ...item,
+                    title: item?.title || item?.name || 'Outfit',
+                    brand: item?.brand || 'Fashion Planet',
+                  }}
+                  theme={theme}
+                  onPress={handleRelatedPress}
+                />
+              ))}
+            </ScrollView>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -202,4 +243,8 @@ const styles = StyleSheet.create({
   actionBtnText:    { color: '#141414', fontWeight: '700', fontSize: 14 },
   actionBtnOutline: { width: 48, height: 48, borderRadius: 50, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   moreTitle:        { fontSize: 18, fontWeight: '700', marginBottom: 14 },
+  relatedLoadingBox: { borderWidth: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  relatedLoadingText: { fontSize: 12, fontWeight: '500' },
+  relatedEmptyBox: { borderWidth: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  relatedEmptyText: { fontSize: 12, fontWeight: '500' },
 });

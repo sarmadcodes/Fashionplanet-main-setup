@@ -21,6 +21,10 @@ import apiClient, { getActiveApiBaseUrl } from './apiClient';
 const delay = () => Promise.resolve();
 
 const getApiErrorMessage = (error, fallback) => {
+  if (error?.userMessage) {
+    return error.userMessage;
+  }
+
   if (!error?.response) {
     return `${fallback} Cannot reach API at ${getActiveApiBaseUrl()}.`;
   }
@@ -120,6 +124,15 @@ export const apiSignup = async ({ fullName, email, password }) => {
       error?.response?.data?.errors?.[0]?.msg ||
       'Registration failed. Please try again.';
     throw new Error(message);
+  }
+};
+
+export const apiDeleteAccount = async () => {
+  try {
+    const { data } = await apiClient.delete('/auth/delete');
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not delete account.'));
   }
 };
 
@@ -318,22 +331,19 @@ export const apiCreatePost = async ({ images, caption }) => {
 
 export const apiToggleLike = async (postId) => {
   if (!isMongoObjectId(String(postId))) {
-    await delay(200);
     return togglePostLike(postId);
   }
   try {
     const { data } = await apiClient.post(`/posts/${postId}/like`);
     return data?.data || {};
   } catch (err) {
-    await delay(400);
-    return togglePostLike(postId);
+    throw new Error(getApiErrorMessage(err, 'Could not update like right now.'));
   }
 };
 
 export const apiAddComment = async (postId, text) => {
   if (!text?.trim()) throw new Error('Comment cannot be empty');
   if (!isMongoObjectId(String(postId))) {
-    await delay(200);
     return addPostComment(postId, text.trim());
   }
   
@@ -341,22 +351,19 @@ export const apiAddComment = async (postId, text) => {
     const { data } = await apiClient.post(`/posts/${postId}/comment`, { text: text.trim() });
     return data?.data?.comment || {};
   } catch (err) {
-    await delay(300);
-    return addPostComment(postId, text.trim());
+    throw new Error(getApiErrorMessage(err, 'Could not add comment right now.'));
   }
 };
 
 export const apiToggleSavePost = async (postId) => {
   if (!isMongoObjectId(String(postId))) {
-    await delay(150);
     return togglePostSave(postId);
   }
   try {
     const { data } = await apiClient.post(`/posts/${postId}/save`);
     return data?.isSaved || false;
   } catch (err) {
-    await delay(300);
-    return togglePostSave(postId);
+    throw new Error(getApiErrorMessage(err, 'Could not save post right now.'));
   }
 };
 

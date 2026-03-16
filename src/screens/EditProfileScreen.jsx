@@ -8,7 +8,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchProfile, apiUpdateProfile } from '../services/mockApi';
+import { apiFetchProfile, apiUpdateProfile } from '../services/apiService';
 
 const resolveSource = (image) => {
   if (!image) return null;

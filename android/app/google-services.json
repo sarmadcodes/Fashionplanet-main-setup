@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "503116798245",
+    "project_id": "loop-e6b5f",
+    "storage_bucket": "loop-e6b5f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:503116798245:android:fb13f755f39badd5fc22cc",
+        "android_client_info": {
+          "package_name": "com.fashionplanet"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAfWrUCNM_zqgmrqp0S-dFFlWS28VmTCsI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

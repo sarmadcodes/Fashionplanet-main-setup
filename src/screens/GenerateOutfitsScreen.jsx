@@ -1,113 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, StatusBar, Animated, Image,
+  ScrollView, StatusBar, Animated, Image, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
+import { apiGenerateOutfit, apiLogOutfitFeedback } from '../services/apiService';
+import {
+  GENERATE_MOOD_ICONS,
+  GENERATE_MOODS,
+  GENERATE_WEATHER_ICONS,
+  GENERATE_WEATHERS,
+} from '../config/uiOptions';
 
-// ── Outfit data — every combo has a unique men's fashion image ─
-const AI_OUTFITS = {
-  Casual: {
-    Sunny: {
-      title: 'Casual Sunny Look',
-      image: 'https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['White Linen Shirt', 'Light Chinos', 'Clean White Sneakers'],
-      missing: 'Canvas Tote Bag', retailer: 'Zara',
-      tip: 'Roll the sleeves for that effortless summer feel.',
-    },
-    Rainy: {
-      title: 'Casual Rainy Day',
-      image: 'https://images.pexels.com/photos/2896840/pexels-photo-2896840.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Oversized Hoodie', 'Slim Joggers', 'Waterproof Ankle Boots'],
-      missing: 'Compact Umbrella', retailer: 'H&M',
-      tip: 'Layer a windbreaker over the hoodie for extra protection.',
-    },
-    Cold: {
-      title: 'Cosy Casual Winter',
-      image: 'https://images.pexels.com/photos/842811/pexels-photo-842811.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Chunky Knit Sweater', 'Dark Slim Jeans', 'Chelsea Boots'],
-      missing: 'Wool Scarf', retailer: 'M&S',
-      tip: 'Tuck the sweater slightly at the front for shape.',
-    },
-  },
-  Business: {
-    Sunny: {
-      title: 'Power Summer Office',
-      image: 'https://images.pexels.com/photos/1300550/pexels-photo-1300550.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Tailored Blazer', 'White Dress Shirt', 'Slim Fit Trousers', 'Oxford Shoes'],
-      missing: 'Leather Belt', retailer: 'M&S',
-      tip: 'Opt for lighter fabric blazers in breathable neutral tones.',
-    },
-    Rainy: {
-      title: 'Sharp Rainy Office',
-      image: 'https://images.pexels.com/photos/1043473/pexels-photo-1043473.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Wool Overcoat', 'Navy Suit', 'Derby Shoes'],
-      missing: 'Leather Briefcase', retailer: 'Next',
-      tip: 'A wool overcoat keeps the sharp silhouette even in rain.',
-    },
-    Cold: {
-      title: 'Winter Business Look',
-      image: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Double Breasted Suit', 'Ribbed Turtleneck', 'Derby Shoes'],
-      missing: 'Cashmere Overcoat', retailer: 'Zara',
-      tip: 'The turtleneck replaces the tie for a modern executive look.',
-    },
-  },
-  Party: {
-    Sunny: {
-      title: 'Day Party Look',
-      image: 'https://images.pexels.com/photos/1192609/pexels-photo-1192609.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Open Collar Linen Shirt', 'Tailored Shorts', 'Suede Loafers'],
-      missing: 'Woven Leather Belt', retailer: 'ASOS',
-      tip: 'Pair with a simple chain for the perfect day event look.',
-    },
-    Rainy: {
-      title: 'Indoor Party Look',
-      image: 'https://images.pexels.com/photos/1183266/pexels-photo-1183266.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Satin Finish Shirt', 'Straight Leg Trousers', 'Chelsea Boots'],
-      missing: 'Minimalist Watch', retailer: 'Zara',
-      tip: 'Satin catches indoor lighting beautifully — keep it fitted.',
-    },
-    Cold: {
-      title: 'Winter Night Out',
-      image: 'https://images.pexels.com/photos/3766111/pexels-photo-3766111.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Velvet Blazer', 'Straight Leg Trousers', 'Ankle Boots'],
-      missing: 'Wool Overcoat', retailer: 'H&M',
-      tip: 'Velvet is winter party gold — rich texture, zero effort.',
-    },
-  },
-  Weekend: {
-    Sunny: {
-      title: 'Weekend Brunch',
-      image: 'https://images.pexels.com/photos/4349759/pexels-photo-4349759.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Linen Shirt', 'Chino Shorts', 'Espadrilles'],
-      missing: 'Polarised Sunglasses', retailer: 'Mango',
-      tip: 'Linen breathes well in the heat — ideal for a long sunny afternoon.',
-    },
-    Rainy: {
-      title: 'Cosy Weekend',
-      image: 'https://images.pexels.com/photos/5384445/pexels-photo-5384445.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Fleece Zip-Up', 'Wide Leg Joggers', 'Slip-on Sneakers'],
-      missing: 'Ribbed Beanie', retailer: 'Uniqlo',
-      tip: 'Monochrome tonal sets look instantly more put-together.',
-    },
-    Cold: {
-      title: 'Cold Weekend Casual',
-      image: 'https://images.pexels.com/photos/8532616/pexels-photo-8532616.jpeg?auto=compress&cs=tinysrgb&w=800',
-      items: ['Sherpa Lined Jacket', 'Dark Slim Jeans', 'White Leather Trainers'],
-      missing: 'Thermal Base Layer', retailer: 'H&M',
-      tip: 'Sherpa jackets give cosy volume without looking overly bulky.',
-    },
-  },
-};
-
-const MOODS    = ['Casual', 'Business', 'Party', 'Weekend'];
-const WEATHERS = ['Sunny', 'Rainy', 'Cold'];
-const MOOD_ICONS    = { Casual: 'walk-outline', Business: 'briefcase-outline', Party: 'wine-outline', Weekend: 'cafe-outline' };
-const WEATHER_ICONS = { Sunny: 'sunny-outline', Rainy: 'rainy-outline', Cold: 'snow-outline' };
+const MOODS = GENERATE_MOODS;
+const WEATHERS = GENERATE_WEATHERS;
+const MOOD_ICONS = GENERATE_MOOD_ICONS;
+const WEATHER_ICONS = GENERATE_WEATHER_ICONS;
 
 // ── Shimmer — high contrast visible pulse ─────────────────────
 const ShimmerBox = ({ w, h, r = 10, style }) => {
@@ -174,7 +85,7 @@ const genStyles = StyleSheet.create({
 });
 
 // ── Result Card ───────────────────────────────────────────────
-const ResultCard = ({ result, mood, weather, theme, onRegenerate }) => (
+const ResultCard = ({ result, mood, weather, theme, onRegenerate, onSave, onWore }) => (
   <View style={[rcStyles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
     <View style={rcStyles.imgWrap}>
       <Image source={{ uri: result.image }} style={rcStyles.img} />
@@ -208,8 +119,8 @@ const ResultCard = ({ result, mood, weather, theme, onRegenerate }) => (
             <Text style={[rcStyles.missingRetailer, { color: theme.secondaryText }]}>Available at {result.retailer}</Text>
           </View>
         </View>
-        <TouchableOpacity style={[rcStyles.shopBtn, { backgroundColor: theme.primary }]}>
-          <Text style={rcStyles.shopBtnText}>Shop</Text>
+        <TouchableOpacity style={[rcStyles.shopBtn, { backgroundColor: theme.primary }]} onPress={onWore}>
+          <Text style={rcStyles.shopBtnText}>I Wore This</Text>
         </TouchableOpacity>
       </View>
       <View style={rcStyles.actionsRow}>
@@ -217,7 +128,7 @@ const ResultCard = ({ result, mood, weather, theme, onRegenerate }) => (
           <Ionicons name="refresh-outline" size={16} color={theme.text} />
           <Text style={[rcStyles.outlineBtnText, { color: theme.text }]}>Regenerate</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[rcStyles.outlineBtn, { borderColor: theme.border }]}>
+        <TouchableOpacity style={[rcStyles.outlineBtn, { borderColor: theme.border }]} onPress={onSave}>
           <Ionicons name="bookmark-outline" size={16} color={theme.text} />
           <Text style={[rcStyles.outlineBtnText, { color: theme.text }]}>Save Look</Text>
         </TouchableOpacity>
@@ -266,31 +177,108 @@ const GenerateOutfitsScreen = ({ navigation }) => {
   const [generating, setGenerating] = useState(false);
   const [percent, setPercent]       = useState(0);
   const [result, setResult]         = useState(null);
+  const [prefetchedOutfits, setPrefetchedOutfits] = useState({});
   const timerRef = useRef(null);
+  const requestRef = useRef(0);
 
-  const startGeneration = () => {
+  const getContextKey = (selectedMood, selectedWeather) => `${selectedMood}:${selectedWeather}`;
+
+  const prefetchOutfit = async (selectedMood, selectedWeather) => {
+    const key = getContextKey(selectedMood, selectedWeather);
+    if (prefetchedOutfits[key]) return;
+
+    try {
+      const prefetched = await apiGenerateOutfit({
+        mood: selectedMood,
+        weather: selectedWeather,
+        isPrefetch: true,
+      });
+      setPrefetchedOutfits((prev) => ({ ...prev, [key]: prefetched }));
+    } catch {
+      // Silent prefetch failure should not block manual generation.
+    }
+  };
+
+  useEffect(() => {
+    prefetchOutfit(mood, weather);
+  }, [mood, weather]);
+
+  const startGeneration = async (forceFresh = false) => {
+    const key = getContextKey(mood, weather);
+    if (!forceFresh && prefetchedOutfits[key]) {
+      setResult(prefetchedOutfits[key]);
+      return;
+    }
+
+    requestRef.current += 1;
+    const requestId = requestRef.current;
+
     setResult(null);
     setPercent(0);
     setGenerating(true);
+
     let p = 0;
     timerRef.current = setInterval(() => {
       p += Math.floor(Math.random() * 3) + 2;
-      if (p >= 100) {
-        p = 100;
-        setPercent(100);
-        clearInterval(timerRef.current);
-        setTimeout(() => {
-          setGenerating(false);
-          setResult(AI_OUTFITS[mood]?.[weather] || AI_OUTFITS['Casual']['Sunny']);
-        }, 500);
-      } else {
-        setPercent(p);
-      }
+      setPercent(Math.min(92, p));
     }, 160);
+
+    try {
+      const generated = await apiGenerateOutfit({ mood, weather, isPrefetch: false });
+      if (requestId !== requestRef.current) return;
+
+      clearInterval(timerRef.current);
+      setPercent(100);
+      setPrefetchedOutfits((prev) => ({ ...prev, [key]: generated }));
+      setTimeout(() => {
+        setGenerating(false);
+        setResult(generated);
+      }, 250);
+    } catch (error) {
+      if (requestId !== requestRef.current) return;
+      clearInterval(timerRef.current);
+      setGenerating(false);
+      setPercent(0);
+      const rawMessage = error?.message || 'Could not generate outfit right now.';
+      const isAiConfigError = /AI is not configured|OPENAI_API_KEY/i.test(rawMessage);
+      Alert.alert(
+        isAiConfigError ? 'AI Setup Required' : 'Unable to Generate Outfit',
+        isAiConfigError
+          ? 'AI is not configured on the backend yet. Add OPENAI_API_KEY in backend .env and restart the server.'
+          : rawMessage
+      );
+    }
   };
 
   useEffect(() => () => { clearInterval(timerRef.current); }, []);
-  const handleRegenerate = () => { setResult(null); startGeneration(); };
+
+  const handleLogFeedback = async (action) => {
+    try {
+      await apiLogOutfitFeedback({ generationId: result?.generationId || null, action });
+      if (action === 'saved') {
+        Alert.alert('Saved', 'Outfit saved to your AI history.');
+      }
+      if (action === 'worn') {
+        Alert.alert('Logged', 'Great. We updated your wear history.');
+      }
+    } catch (error) {
+      Alert.alert('Action Failed', error?.message || 'Could not update feedback.');
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (result?.generationId) {
+      await handleLogFeedback('regenerated');
+    }
+    const key = getContextKey(mood, weather);
+    setPrefetchedOutfits((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setResult(null);
+    startGeneration(true);
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -340,14 +328,22 @@ const GenerateOutfitsScreen = ({ navigation }) => {
         {!generating && !result && (
           <TouchableOpacity style={[styles.genBtn, { backgroundColor: theme.primary }]} onPress={startGeneration} activeOpacity={0.85}>
             <Ionicons name="sparkles" size={18} color="#141414" />
-            <Text style={styles.genBtnText}>Generate My Outfit</Text>
+            <Text style={styles.genBtnText}>{prefetchedOutfits[getContextKey(mood, weather)] ? 'Show Ready Outfit' : 'Generate My Outfit'}</Text>
           </TouchableOpacity>
         )}
 
         {generating && <GeneratingView theme={theme} percent={percent} />}
 
         {result && !generating && (
-          <ResultCard result={result} mood={mood} weather={weather} theme={theme} onRegenerate={handleRegenerate} />
+          <ResultCard
+            result={result}
+            mood={mood}
+            weather={weather}
+            theme={theme}
+            onRegenerate={handleRegenerate}
+            onSave={() => handleLogFeedback('saved')}
+            onWore={() => handleLogFeedback('worn')}
+          />
         )}
       </ScrollView>
     </SafeAreaView>

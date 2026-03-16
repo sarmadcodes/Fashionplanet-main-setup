@@ -8,11 +8,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiAddWardrobeItem, apiUpdateWardrobeItem } from '../services/mockApi';
+import { apiAddWardrobeItem, apiUpdateWardrobeItem } from '../services/apiService';
+import {
+  WARDROBE_CATEGORIES,
+  WARDROBE_COLORS,
+  WARDROBE_SEASONS,
+} from '../config/uiOptions';
 
-const CATEGORIES = ['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Accessories', 'Bags'];
-const COLORS     = ['Black', 'White', 'Navy', 'Grey', 'Beige', 'Brown', 'Red', 'Green', 'Pink'];
-const SEASONS    = ['Spring', 'Summer', 'Fall', 'Winter', 'All Season'];
+const CATEGORIES = WARDROBE_CATEGORIES;
+const COLORS = WARDROBE_COLORS;
+const SEASONS = WARDROBE_SEASONS;
 
 const ChipGroup = ({ data, selected, onSelect, error, theme }) => (
   <View>

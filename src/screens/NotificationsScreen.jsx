@@ -14,7 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchNotifications, apiMarkNotificationAsRead } from '../services/mockApi';
+import { apiFetchNotifications, apiMarkNotificationAsRead } from '../services/apiService';
 
 const NotificationsScreen = () => {
   const { isDark } = useTheme();

@@ -24,6 +24,10 @@ const CustomBottomBar = ({ state, navigation }) => {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
   const theme = isDark ? darkTheme : lightTheme;
+  const bottomInset = insets.bottom > 0 ? insets.bottom : 10;
+  const barHeight = 58 + bottomInset;
+  const barPaddingBottom = Math.max(8, bottomInset - 1);
+  const barPaddingTop = 6;
 
   const animations = useRef(
     state.routes.map((_, i) => new Animated.Value(i === state.index ? 1 : 0))
@@ -40,12 +44,15 @@ const CustomBottomBar = ({ state, navigation }) => {
   }, [state.index]);
 
   return (
-    <View style={[styles.absoluteWrapper, { bottom: 0, paddingBottom: insets.bottom }]}>
+    <View style={[styles.absoluteWrapper, { bottom: 0 }]}>
       <View style={[
         styles.bar,
         {
           backgroundColor: theme.card,
           borderTopColor: theme.border,
+          height: barHeight,
+          paddingBottom: barPaddingBottom,
+          paddingTop: barPaddingTop,
           // subtle top shadow on light, glow-like on dark
           shadowColor: isDark ? theme.primary : '#000',
         },
@@ -56,12 +63,12 @@ const CustomBottomBar = ({ state, navigation }) => {
 
           const translateY = anim.interpolate({
             inputRange: [0, 1],
-            outputRange: [0, -14],
+            outputRange: [0, -6],
           });
 
           const scale = anim.interpolate({
             inputRange: [0, 1],
-            outputRange: [1, 1.15],
+            outputRange: [1, 1.08],
           });
 
           // Active icon: filled primary bg, dark icon
@@ -69,7 +76,6 @@ const CustomBottomBar = ({ state, navigation }) => {
           const iconBg     = isFocused ? theme.primary : 'transparent';
           const iconBorder = isFocused ? theme.primary : theme.border;
           const iconColor  = isFocused ? '#141414' : theme.secondaryText;
-          const iconSize   = isFocused ? 45 : 34;
 
           return (
             <TouchableOpacity
@@ -85,8 +91,6 @@ const CustomBottomBar = ({ state, navigation }) => {
                     transform: [{ translateY }, { scale }],
                     backgroundColor: iconBg,
                     borderColor: iconBorder,
-                    width: iconSize,
-                    height: iconSize,
                   },
                 ]}
               >
@@ -123,7 +127,6 @@ const styles = StyleSheet.create({
   },
   bar: {
     flexDirection: 'row',
-    height: 75,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     borderTopWidth: 0.5,
@@ -131,24 +134,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: -3 },
     shadowRadius: 10,
-    alignItems: 'flex-end',
-    paddingBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'space-around',
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    minHeight: 44,
   },
   iconWrapper: {
+    width: 38,
+    height: 38,
     borderRadius: 50,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   label: {
     fontSize: 10,
     fontWeight: '500',
+    lineHeight: 12,
   },
   activeLabel: {
     fontWeight: '700',

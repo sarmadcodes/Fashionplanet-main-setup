@@ -3,6 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setActiveStoreUser } from '../services/appStore';
 
 const AuthContext = createContext();
+const AUTH_STORAGE_KEYS = ['user_session', 'auth_token', 'is_logged_in', 'auth_user_id'];
+
+const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+
+const clearAuthState = async ({ setUser, setToken, setAuthLoading } = {}) => {
+  setUser?.(null);
+  setToken?.(null);
+  await AsyncStorage.multiRemove(AUTH_STORAGE_KEYS);
+  await setActiveStoreUser(null);
+  if (setAuthLoading) setAuthLoading(false);
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -10,51 +21,67 @@ export const AuthProvider = ({ children }) => {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      AsyncStorage.getItem('user_session'),
-      AsyncStorage.getItem('auth_token'),
-    ]).then(async ([sessionStr, savedToken]) => {
-      const hasRealToken = Boolean(savedToken && savedToken !== 'mock_token');
+    const bootstrapAuth = async () => {
+      try {
+        const [sessionStr, savedToken] = await Promise.all([
+          AsyncStorage.getItem('user_session'),
+          AsyncStorage.getItem('auth_token'),
+        ]);
 
-      if (sessionStr && !hasRealToken) {
-        await AsyncStorage.multiRemove(['user_session', 'auth_token', 'is_logged_in', 'auth_user_id']);
-        setUser(null);
-        setToken(null);
-        setActiveStoreUser(null);
-        setAuthLoading(false);
-        return;
-      }
+        // Session and token must exist together; partial auth state is invalid.
+        if (!sessionStr || !isNonEmptyString(savedToken)) {
+          await clearAuthState({ setUser, setToken, setAuthLoading });
+          return;
+        }
 
-      if (sessionStr) {
-        const session = JSON.parse(sessionStr);
+        let session = null;
+        try {
+          session = JSON.parse(sessionStr);
+        } catch {
+          await clearAuthState({ setUser, setToken, setAuthLoading });
+          return;
+        }
+
+        if (!session || typeof session !== 'object') {
+          await clearAuthState({ setUser, setToken, setAuthLoading });
+          return;
+        }
+
         setUser(session);
-        setActiveStoreUser(session);
-      } else {
-        setActiveStoreUser(null);
+        setToken(savedToken);
+        await setActiveStoreUser(session);
+      } finally {
+        setAuthLoading(false);
       }
-      if (hasRealToken) setToken(savedToken);
-      setAuthLoading(false);
-    });
+    };
+
+    bootstrapAuth();
   }, []);
 
   const login = async (userData, authToken) => {
+    if (!userData || typeof userData !== 'object') {
+      throw new Error('Login failed: missing user data.');
+    }
+
+    if (!isNonEmptyString(authToken)) {
+      throw new Error('Login failed: missing authentication token.');
+    }
+
     setUser(userData);
-    setToken(authToken || 'mock_token');
+    setToken(authToken);
     await AsyncStorage.setItem('auth_user_id', userData?.id || userData?._id || 'guest');
     await AsyncStorage.setItem('user_session', JSON.stringify(userData));
-    await AsyncStorage.setItem('auth_token', authToken || 'mock_token');
+    await AsyncStorage.setItem('auth_token', authToken);
     await AsyncStorage.setItem('is_logged_in', 'true');
     await setActiveStoreUser(userData);
   };
 
   const logout = async () => {
-    setUser(null);
-    setToken(null);
-    await AsyncStorage.multiRemove(['user_session', 'auth_token', 'is_logged_in', 'auth_user_id']);
-    await setActiveStoreUser(null);
+    await clearAuthState({ setUser, setToken });
   };
 
   const updateUser = (data) => {
+    if (!user) return;
     const updated = { ...user, ...data };
     setUser(updated);
     AsyncStorage.setItem('user_session', JSON.stringify(updated));

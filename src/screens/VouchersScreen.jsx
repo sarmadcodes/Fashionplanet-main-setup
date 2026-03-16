@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchVouchers } from '../services/mockApi';
+import { apiFetchVouchers } from '../services/apiService';
 
 const Skeleton = ({ w, h, r = 10, style }) => {
   const { isDark } = useTheme();

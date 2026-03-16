@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_HOSTS = [
   'http://10.0.2.2:5000',
-  'http://192.168.100.192:5000',
+  'http://192.168.18.24:5000',
   'http://127.0.0.1:5000',
   'http://localhost:5000',
 ];
@@ -12,6 +12,30 @@ let activeHostIndex = 0;
 const getBaseUrl = () => `${API_HOSTS[activeHostIndex]}/api`;
 let hostResolved = false;
 let hostResolvingPromise = null;
+const RETRYABLE_METHODS = new Set(['get', 'head', 'options']);
+
+const getUserFacingApiError = (error) => {
+  if (!error?.response) {
+    if (error?.code === 'ECONNABORTED') {
+      return 'Request timed out. Please check your connection and try again.';
+    }
+    return 'Cannot reach server. Please check your connection and try again.';
+  }
+
+  if (error.response.status === 401) {
+    return 'Your session expired. Please log in again.';
+  }
+
+  if (error.response.status === 429) {
+    return error?.response?.data?.message || "You've reached your daily outfit limit, come back tomorrow.";
+  }
+
+  if (error.response.status >= 500) {
+    return error?.response?.data?.message || 'Server is temporarily unavailable. Please try again shortly.';
+  }
+
+  return null;
+};
 
 const probeHost = async (host) => {
   try {
@@ -90,9 +114,11 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config || {};
+    const requestMethod = String(originalRequest.method || 'get').toLowerCase();
+    const isRetryableMethod = RETRYABLE_METHODS.has(requestMethod);
 
     // If host is unreachable (no HTTP response), rotate to next known host and retry.
-    if (!error.response && originalRequest && !originalRequest._hostRetryExhausted) {
+    if (!error.response && originalRequest && isRetryableMethod && !originalRequest._hostRetryExhausted) {
       const retries = originalRequest._hostRetries || 0;
       if (retries < API_HOSTS.length - 1) {
         activeHostIndex = (activeHostIndex + 1) % API_HOSTS.length;
@@ -107,6 +133,11 @@ apiClient.interceptors.response.use(
       }
 
       originalRequest._hostRetryExhausted = true;
+    }
+
+    const userMessage = getUserFacingApiError(error);
+    if (userMessage) {
+      error.userMessage = userMessage;
     }
 
     return Promise.reject(error);

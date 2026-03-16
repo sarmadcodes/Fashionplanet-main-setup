@@ -20,7 +20,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import FilterGroup from '../components/FilterGroup';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchFeedPosts, apiToggleLike, apiAddComment, apiToggleSavePost } from '../services/mockApi';
+import { apiFetchFeedPosts, apiToggleLike, apiAddComment, apiToggleSavePost } from '../services/apiService';
 
 const myFilters = [
   { id: 1, name: 'Winter style' },
