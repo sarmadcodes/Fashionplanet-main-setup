@@ -40,15 +40,6 @@ export const STYLE_AVATAR_TYPES = Object.freeze([
   { id: 6, label: 'Athleisure', icon: 'fitness-outline', color: '#9B59B6', image: 'https://images.pexels.com/photos/1040881/pexels-photo-1040881.jpeg?auto=compress&cs=tinysrgb&w=800' },
 ]);
 
-export const VIRTUAL_TRYON_OUTFITS = Object.freeze([
-  { id: 't1', label: 'Smart Look', image: 'https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 't2', label: 'Power Suit', image: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 't3', label: 'Street Style', image: 'https://images.pexels.com/photos/2896840/pexels-photo-2896840.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 't4', label: 'Weekend Casual', image: 'https://images.pexels.com/photos/4349759/pexels-photo-4349759.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 't5', label: 'Business Look', image: 'https://images.pexels.com/photos/3760263/pexels-photo-3760263.jpeg?auto=compress&cs=tinysrgb&w=800' },
-  { id: 't6', label: 'Winter Layer', image: 'https://images.pexels.com/photos/8532616/pexels-photo-8532616.jpeg?auto=compress&cs=tinysrgb&w=800' },
-]);
-
 export const GENERATE_OUTFIT_PRESETS = Object.freeze({
   Casual: {
     Sunny: {

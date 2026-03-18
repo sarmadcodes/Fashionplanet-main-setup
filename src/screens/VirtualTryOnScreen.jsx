@@ -2,16 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, StatusBar, Animated, Image, useWindowDimensions,
+  ScrollView, StatusBar, Animated, Image, useWindowDimensions, ActivityIndicator,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
-import { VIRTUAL_TRYON_OUTFITS } from '../config/uiOptions';
-
-const TRYON_OUTFITS = VIRTUAL_TRYON_OUTFITS;
+import { apiFetchWardrobeItems } from '../services/apiService';
 
 // ── Shimmer — high contrast visible pulse ─────────────────────
 const ShimmerBox = ({ w, h, r = 10, style }) => {
@@ -63,9 +61,36 @@ const VirtualTryOnScreen = ({ navigation }) => {
   const [loading, setLoading]   = useState(false);
   const [percent, setPercent]   = useState(0);
   const [result, setResult]     = useState(null);
+  const [outfits, setOutfits]   = useState([]);
+  const [loadingOutfits, setLoadingOutfits] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const timerRef = useRef(null);
 
-  useEffect(() => () => { clearInterval(timerRef.current); }, []);
+  const loadOutfits = async () => {
+    setLoadingOutfits(true);
+    setLoadError('');
+    try {
+      const items = await apiFetchWardrobeItems();
+      const mapped = (items || [])
+        .filter((item) => Boolean(item?.image))
+        .map((item) => ({
+          id: String(item.id),
+          label: item.name || item.title || 'Wardrobe Item',
+          image: item.image,
+        }));
+      setOutfits(mapped);
+    } catch (err) {
+      setOutfits([]);
+      setLoadError(err.message || 'Could not load wardrobe items.');
+    } finally {
+      setLoadingOutfits(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOutfits();
+    return () => { clearInterval(timerRef.current); };
+  }, []);
 
   const tryOn = (item) => {
     setSelected(item);
@@ -120,35 +145,56 @@ const VirtualTryOnScreen = ({ navigation }) => {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
         <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
-          Select an outfit below to see how it looks on your avatar
+          Select an item from your wardrobe to see how it looks on your avatar
         </Text>
 
         <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>CHOOSE AN OUTFIT</Text>
-        <View style={styles.grid}>
-          {TRYON_OUTFITS.map(item => (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.gridCard,
-                { width: cardWidth },
-                { borderColor: selected?.id === item.id ? theme.primary : theme.border, borderWidth: selected?.id === item.id ? 2 : 0.5 },
-              ]}
-              onPress={() => tryOn(item)}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              <Image source={{ uri: item.image }} style={styles.gridImg} />
-              {selected?.id === item.id && (
-                <View style={[styles.selectedBadge, { backgroundColor: theme.primary }]}>
-                  <Ionicons name="checkmark" size={12} color="#141414" />
-                </View>
-              )}
-              <View style={styles.gridLabel}>
-                <Text style={[styles.gridLabelText, { color: theme.text }]} numberOfLines={1}>{item.label}</Text>
-              </View>
+        {loadingOutfits ? (
+          <View style={[styles.statusCard, { backgroundColor: theme.card, borderColor: theme.border }]}> 
+            <ActivityIndicator size="small" color={theme.primary} />
+            <Text style={[styles.statusText, { color: theme.secondaryText }]}>Loading your wardrobe...</Text>
+          </View>
+        ) : loadError ? (
+          <View style={[styles.statusCard, { backgroundColor: theme.card, borderColor: theme.border }]}> 
+            <Text style={[styles.statusText, { color: theme.secondaryText }]}>{loadError}</Text>
+            <TouchableOpacity style={[styles.statusAction, { backgroundColor: theme.primary }]} onPress={loadOutfits}>
+              <Text style={styles.statusActionText}>Retry</Text>
             </TouchableOpacity>
-          ))}
-        </View>
+          </View>
+        ) : outfits.length === 0 ? (
+          <View style={[styles.statusCard, { backgroundColor: theme.card, borderColor: theme.border }]}> 
+            <Text style={[styles.statusText, { color: theme.secondaryText }]}>No wardrobe images yet. Add items to start Try-On.</Text>
+            <TouchableOpacity style={[styles.statusAction, { backgroundColor: theme.primary }]} onPress={() => navigation.navigate('AddItemsScreen')}>
+              <Text style={styles.statusActionText}>Add Item</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.grid}>
+            {outfits.map(item => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.gridCard,
+                  { width: cardWidth },
+                  { borderColor: selected?.id === item.id ? theme.primary : theme.border, borderWidth: selected?.id === item.id ? 2 : 0.5 },
+                ]}
+                onPress={() => tryOn(item)}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <Image source={{ uri: item.image }} style={styles.gridImg} />
+                {selected?.id === item.id && (
+                  <View style={[styles.selectedBadge, { backgroundColor: theme.primary }]}>
+                    <Ionicons name="checkmark" size={12} color="#141414" />
+                  </View>
+                )}
+                <View style={styles.gridLabel}>
+                  <Text style={[styles.gridLabelText, { color: theme.text }]} numberOfLines={1}>{item.label}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Loading — shimmer + progress line */}
         {loading && (
@@ -209,6 +255,10 @@ const styles = StyleSheet.create({
   aiBadgeText:    { fontSize: 11, fontWeight: '800' },
   subtitle:       { fontSize: 13, lineHeight: 20, marginBottom: 20 },
   sectionLabel:   { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 12 },
+  statusCard:      { borderRadius: 14, borderWidth: 1, padding: 16, marginBottom: 24, alignItems: 'center', gap: 10 },
+  statusText:      { fontSize: 13, textAlign: 'center', lineHeight: 18 },
+  statusAction:    { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 50 },
+  statusActionText:{ color: '#141414', fontSize: 12, fontWeight: '700' },
   grid:           { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
   gridCard:       { borderRadius: 14, overflow: 'hidden' },
   gridImg:        { width: '100%', height: 170, resizeMode: 'cover' },
