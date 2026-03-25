@@ -8,6 +8,8 @@ import {
   StatusBar,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -66,9 +68,11 @@ const SingleOutfitScreen = () => {
   const { isDark } = useTheme();
   const theme      = isDark ? darkTheme : lightTheme;
 
-  const { image, name, brand, category, color, season } = route.params || {};
+  const { image, name, brand, category, color, season, source, aiMeta } = route.params || {};
   const [relatedOutfits, setRelatedOutfits] = useState([]);
   const [relatedLoading, setRelatedLoading] = useState(true);
+  const [liked, setLiked] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
 
   const relatedSeed = useMemo(
     () => `${String(name || '')}|${String(category || '')}|${String(season || '')}`,
@@ -133,6 +137,51 @@ const SingleOutfitScreen = () => {
     });
   };
 
+  const deriveMood = () => {
+    const text = `${String(aiMeta?.occasion || '')} ${String(category || '')} ${String(name || '')}`.toLowerCase();
+    if (/business|office|formal|work|blazer|suit/.test(text)) return 'Business';
+    if (/party|club|night|event/.test(text)) return 'Party';
+    if (/weekend|relax|street/.test(text)) return 'Weekend';
+    return 'Casual';
+  };
+
+  const deriveWeather = () => {
+    const direct = String(aiMeta?.preferredWeather || season || '').toLowerCase();
+    if (/rain|rainy|storm/.test(direct)) return 'Rainy';
+    if (/cold|winter|chill|snow/.test(direct)) return 'Cold';
+    return 'Sunny';
+  };
+
+  const handleGenerateSimilar = () => {
+    navigation.navigate('GenerateOutfitsScreen', {
+      initialMood: deriveMood(),
+      initialWeather: deriveWeather(),
+      similarNonce: Date.now(),
+    });
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `${name || 'Outfit'}\n${image || ''}`,
+        url: image || undefined,
+        title: name || 'Outfit',
+      });
+    } catch {
+      Alert.alert('Share Failed', 'Could not share this outfit right now.');
+    }
+  };
+
+  const handleFavoriteToggle = () => {
+    setLiked((prev) => !prev);
+    Alert.alert(liked ? 'Removed' : 'Liked', liked ? 'Removed from favorites.' : 'Added to favorites.');
+  };
+
+  const handleBookmarkToggle = () => {
+    setBookmarked((prev) => !prev);
+    Alert.alert(bookmarked ? 'Removed' : 'Saved', bookmarked ? 'Removed bookmark.' : 'Saved for later.');
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.background} />
@@ -148,8 +197,9 @@ const SingleOutfitScreen = () => {
         <Text style={[styles.headerTitle, { color: theme.text }]}>Outfit Details</Text>
         <TouchableOpacity
           style={[styles.backBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
+          onPress={handleFavoriteToggle}
         >
-          <Ionicons name="heart-outline" size={18} color={theme.text} />
+          <Ionicons name={liked ? 'heart' : 'heart-outline'} size={18} color={liked ? '#ff4b6e' : theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -160,6 +210,12 @@ const SingleOutfitScreen = () => {
             source={typeof image === 'string' ? { uri: image } : image}
             style={styles.heroImage}
           />
+          {source === 'ai' ? (
+            <View style={[styles.aiBadge, { backgroundColor: theme.primary }]}> 
+              <Ionicons name="sparkles" size={12} color="#141414" />
+              <Text style={styles.aiBadgeText}>AI LOOK</Text>
+            </View>
+          ) : null}
           {brand ? (
             <View style={[styles.brandBadge, { backgroundColor: theme.primary }]}>
               <Text style={styles.brandBadgeText}>{brand}</Text>
@@ -179,16 +235,38 @@ const SingleOutfitScreen = () => {
             <InfoChip icon="pricetag-outline"       label="Brand"    value={brand}    theme={theme} />
           </View>
 
+          {source === 'ai' && aiMeta ? (
+            <View style={[styles.aiMetaBox, { backgroundColor: theme.card, borderColor: theme.border }]}> 
+              <Text style={[styles.aiMetaTitle, { color: theme.text }]}>AI Styling Notes</Text>
+              {!!aiMeta?.explanation && (
+                <Text style={[styles.aiMetaText, { color: theme.secondaryText }]}>{aiMeta.explanation}</Text>
+              )}
+              {!!aiMeta?.weatherNote && (
+                <Text style={[styles.aiMetaText, { color: theme.secondaryText }]}>{aiMeta.weatherNote}</Text>
+              )}
+              {Array.isArray(aiMeta?.tips) && aiMeta.tips.length > 0 ? (
+                <View style={{ marginTop: 8 }}>
+                  {aiMeta.tips.slice(0, 3).map((tip, idx) => (
+                    <View key={`${tip}_${idx}`} style={styles.tipRow}>
+                      <Ionicons name="checkmark-circle" size={15} color={theme.primary} />
+                      <Text style={[styles.tipText, { color: theme.text }]}>{tip}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={styles.actionsRow}>
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: theme.primary }]}>
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: theme.primary }]} onPress={handleGenerateSimilar}>
               <Ionicons name="sparkles-outline" size={16} color="#141414" />
               <Text style={styles.actionBtnText}>Generate Similar</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtnOutline, { borderColor: theme.border }]}>
+            <TouchableOpacity style={[styles.actionBtnOutline, { borderColor: theme.border }]} onPress={handleShare}>
               <Ionicons name="share-outline" size={18} color={theme.text} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtnOutline, { borderColor: theme.border }]}>
-              <Ionicons name="bookmark-outline" size={18} color={theme.text} />
+            <TouchableOpacity style={[styles.actionBtnOutline, { borderColor: theme.border }]} onPress={handleBookmarkToggle}>
+              <Ionicons name={bookmarked ? 'bookmark' : 'bookmark-outline'} size={18} color={bookmarked ? theme.primary : theme.text} />
             </TouchableOpacity>
           </View>
 
@@ -234,10 +312,17 @@ const styles = StyleSheet.create({
   headerTitle:      { fontSize: 16, fontWeight: '700' },
   heroWrap:         { position: 'relative', marginBottom: 20 },
   heroImage:        { width: '100%', height: 420, resizeMode: 'cover' },
+  aiBadge:          { position: 'absolute', top: 16, left: 20, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  aiBadgeText:      { color: '#141414', fontWeight: '800', fontSize: 11 },
   brandBadge:       { position: 'absolute', bottom: 16, left: 20, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 50 },
   brandBadgeText:   { color: '#141414', fontWeight: '800', fontSize: 12 },
   itemName:         { fontSize: 22, fontWeight: '800', marginBottom: 16 },
   chipsGrid:        { flexDirection: 'row', gap: 10 },
+  aiMetaBox:        { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 14 },
+  aiMetaTitle:      { fontSize: 14, fontWeight: '700', marginBottom: 6 },
+  aiMetaText:       { fontSize: 12, lineHeight: 18, marginBottom: 2 },
+  tipRow:           { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
+  tipText:          { flex: 1, fontSize: 12, lineHeight: 17 },
   actionsRow:       { flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 28, alignItems: 'center' },
   actionBtn:        { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, height: 48, borderRadius: 50 },
   actionBtnText:    { color: '#141414', fontWeight: '700', fontSize: 14 },

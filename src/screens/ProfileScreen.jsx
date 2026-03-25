@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   Image, ScrollView, StatusBar, StyleSheet, Text,
   TouchableOpacity, View, useWindowDimensions,
@@ -10,7 +10,7 @@ import CustomButton from '../components/CustomButton';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchOutfits, apiFetchProfile, apiFetchSavedPosts } from '../services/apiService';
+import { apiFetchAiOutfits, apiFetchOutfits, apiFetchProfile, apiFetchSavedPosts } from '../services/apiService';
 import { getSavedPosts } from '../services/appStore';
 
 // ─── Skeleton ─────────────────────────────────────────────────
@@ -24,6 +24,7 @@ const Skeleton = ({ w, h, r = 8, style }) => {
 // ─── Menu items ───────────────────────────────────────────────
 const MENU_ITEMS = [
   { label: 'My Outfits',       icon: 'shirt-outline',    screen: 'OutfitsScreen'  },
+  { label: 'Saved Posts',      icon: 'bookmark-outline', screen: 'SavedPostsScreen' },
   { label: 'Rewards & Points', icon: 'gift-outline',     screen: 'RewardsScreen'  },
   { label: 'Vouchers',         icon: 'pricetag-outline', screen: 'VouchersScreen' },
   { label: 'Week Planner',     icon: 'calendar-outline', screen: 'WeekPlanScreen' },
@@ -50,7 +51,7 @@ const ProfileAvatar = ({ uri, name, size = 72, theme }) => {
 };
 
 // ─── Saved Post Card ──────────────────────────────────────────
-const SavedPostCard = ({ item, theme, width }) => (
+const SavedPostCard = ({ item, theme, width, onPress }) => (
   <TouchableOpacity
     style={[{
       width: (width - 52) / 2,
@@ -60,6 +61,7 @@ const SavedPostCard = ({ item, theme, width }) => (
       borderWidth: 0.5,
       borderColor: theme.border,
     }]}
+    onPress={() => onPress?.(item)}
     activeOpacity={0.8}
   >
     {item.images && item.images.length > 0 && (
@@ -96,7 +98,10 @@ const OutfitThumbCard = ({ item, theme, onPress }) => (
     onPress={() => onPress(item)}
     activeOpacity={0.8}
   >
-    <Image source={item.image} style={thumbStyles.img} />
+    <Image
+      source={typeof item.image === 'string' ? { uri: item.image } : item.image}
+      style={thumbStyles.img}
+    />
     <View style={thumbStyles.info}>
       <Text style={[thumbStyles.title, { color: theme.text }]} numberOfLines={1}>{item.title}</Text>
       <Text style={[thumbStyles.sub, { color: theme.secondaryText }]}>{item.subtitle}</Text>
@@ -115,51 +120,87 @@ const thumbStyles = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────
 const ProfileScreen = ({ navigation }) => {
   const { isDark } = useTheme();
-  const { user, updateUser } = useAuth();
+  const { updateUser } = useAuth();
   const { width } = useWindowDimensions();
   const theme = isDark ? darkTheme : lightTheme;
 
   const [loading, setLoading] = useState(true);
+  const hasLoadedOnceRef = useRef(false);
+  const loadingRef = useRef(false);
+  const updateUserRef = useRef(updateUser);
   const [profile, setProfile] = useState(null);
   const [recentOutfits, setRecentOutfits] = useState([]);
+  const [aiOutfits, setAiOutfits] = useState([]);
+  const [aiAvatars, setAiAvatars] = useState([]);
   const [savedPosts, setSavedPosts] = useState([]);
 
-  useFocusEffect(
-    useCallback(() => { load(); }, [])
-  );
+  updateUserRef.current = updateUser;
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+
     try {
-      setLoading(true);
-      const [data, outfits, saved] = await Promise.all([
+      if (!hasLoadedOnceRef.current) {
+        setLoading(true);
+      }
+
+      const [profileResult, outfitsResult, aiLooksResult, savedResult] = await Promise.allSettled([
         apiFetchProfile(),
         apiFetchOutfits(),
+        apiFetchAiOutfits(),
         apiFetchSavedPosts(),
       ]);
-      
-      // Load profile and outfits
-      setProfile(data);
-      setRecentOutfits((outfits || []).slice(0, 3).map((item) => ({
-        ...item,
-        subtitle: item.category || item.brand || 'Outfit',
-      })));
-      
-      // Load saved posts
-      setSavedPosts((saved || []).map((p) => ({
-        ...p,
-        id: p.id || p._id,
-      })));
-      
-      updateUser(data);
-    } catch {
-      if (user) {
-        setProfile(user);
+
+      if (profileResult.status === 'fulfilled') {
+        setProfile(profileResult.value);
+        updateUserRef.current?.(profileResult.value);
       }
-      setSavedPosts(getSavedPosts());
+
+      if (outfitsResult.status === 'fulfilled') {
+        setRecentOutfits((outfitsResult.value || []).filter((item) => item?.source !== 'ai').slice(0, 3).map((item) => ({
+          ...item,
+          subtitle: item.category || item.brand || 'Outfit',
+        })));
+      }
+
+      if (aiLooksResult.status === 'fulfilled') {
+        const normalizedAiLooks = (aiLooksResult.value || []).map((item) => ({
+          ...item,
+          subtitle: item?.aiMeta?.occasion || item?.category || 'AI Outfit',
+        }));
+
+        setAiOutfits(normalizedAiLooks
+          .filter((item) => String(item?.aiMeta?.occasion || '').toLowerCase() !== 'style-avatar')
+          .slice(0, 4));
+
+        setAiAvatars(normalizedAiLooks
+          .filter((item) => String(item?.aiMeta?.occasion || '').toLowerCase() === 'style-avatar')
+          .slice(0, 4));
+      }
+
+      if (savedResult.status === 'fulfilled') {
+        setSavedPosts((savedResult.value || []).map((p) => ({
+          ...p,
+          id: p.id || p._id,
+        })));
+      } else {
+        setSavedPosts((getSavedPosts() || []).map((p) => ({
+          ...p,
+          id: p.id || p._id,
+        })));
+      }
+
+      hasLoadedOnceRef.current = true;
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => { load(); }, [load])
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -268,25 +309,103 @@ const ProfileScreen = ({ navigation }) => {
             ) : null}
           </View>
 
-          {/* Saved Posts */}
-          {savedPosts.length > 0 && (
-            <>
-              <View style={styles.sectionRow}>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>Saved Posts</Text>
-                <Text style={[styles.seeAll, { color: theme.secondaryText }]}>{savedPosts.length}</Text>
-              </View>
+          {/* AI Generated Outfits */}
+          <View style={styles.sectionRow}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>AI Generated Outfits</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('OutfitsScreen', { filter: 'ai', filterSubtype: 'outfit' })}>
+              <Text style={[styles.seeAll, { color: theme.secondaryText }]}>See all</Text>
+            </TouchableOpacity>
+          </View>
 
-              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-                {savedPosts.map((post) => (
-                  <SavedPostCard
-                    key={post.id}
-                    item={post}
-                    theme={theme}
-                    width={width - 40}
-                  />
-                ))}
+          <View style={styles.outfitRow}>
+            {aiOutfits.map(item => (
+              <OutfitThumbCard
+                key={item.id}
+                item={item}
+                theme={theme}
+                onPress={() => navigation.navigate('SingleOutfitScreen', {
+                  id: item.id,
+                  image: item.image,
+                  name: item.title,
+                  brand: item.brand,
+                  category: item.category,
+                  color: item.color,
+                  season: item.season,
+                  source: item.source,
+                  aiMeta: item.aiMeta,
+                })}
+              />
+            ))}
+            {aiOutfits.length === 0 ? (
+              <View style={[styles.emptyRecent, { backgroundColor: theme.card, borderColor: theme.border }]}> 
+                <Ionicons name="sparkles-outline" size={24} color={theme.secondaryText} />
+                <Text style={[styles.emptyRecentText, { color: theme.secondaryText }]}>No AI outfits generated yet</Text>
               </View>
-            </>
+            ) : null}
+          </View>
+
+          {/* AI Generated Avatars */}
+          <View style={styles.sectionRow}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>AI Generated Avatars</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('OutfitsScreen', { filter: 'ai', filterSubtype: 'avatar' })}>
+              <Text style={[styles.seeAll, { color: theme.secondaryText }]}>See all</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.outfitRow}>
+            {aiAvatars.map(item => (
+              <OutfitThumbCard
+                key={item.id}
+                item={item}
+                theme={theme}
+                onPress={() => navigation.navigate('SingleOutfitScreen', {
+                  id: item.id,
+                  image: item.image,
+                  name: item.title,
+                  brand: item.brand,
+                  category: item.category,
+                  color: item.color,
+                  season: item.season,
+                  source: item.source,
+                  aiMeta: item.aiMeta,
+                })}
+              />
+            ))}
+            {aiAvatars.length === 0 ? (
+              <View style={[styles.emptyRecent, { backgroundColor: theme.card, borderColor: theme.border }]}> 
+                <Ionicons name="person-circle-outline" size={24} color={theme.secondaryText} />
+                <Text style={[styles.emptyRecentText, { color: theme.secondaryText }]}>No AI avatars generated yet</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Saved Posts */}
+          <View style={styles.sectionRow}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Saved Posts</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('SavedPostsScreen')}>
+              <Text style={[styles.seeAll, { color: theme.secondaryText }]}>
+                {savedPosts.length > 0 ? 'See all' : 'Open'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {savedPosts.length > 0 ? (
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+              {savedPosts.slice(0, 4).map((post) => (
+                <SavedPostCard
+                  key={post.id}
+                  item={post}
+                  theme={theme}
+                  width={width - 40}
+                  onPress={() => navigation.navigate('SavedPostsScreen', { postId: post.id })}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={[styles.emptyRecent, { backgroundColor: theme.card, borderColor: theme.border, marginBottom: 20 }]}> 
+              <Ionicons name="bookmark-outline" size={24} color={theme.secondaryText} />
+              <Text style={[styles.emptyRecentText, { color: theme.secondaryText }]}>No saved posts yet</Text>
+            </View>
           )}
 
           {/* Quick Access */}

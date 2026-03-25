@@ -53,6 +53,14 @@ const EditProfileScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [website, setWebsite] = useState('');
+  const [gender, setGender] = useState('prefer-not-to-say');
+  const [sizeTop, setSizeTop] = useState('');
+  const [sizeBottom, setSizeBottom] = useState('');
+  const [shoeSize, setShoeSize] = useState('');
+  const [city, setCity] = useState('');
+  const [country, setCountry] = useState('');
+  const [styleTypesText, setStyleTypesText] = useState('');
+  const [email, setEmail] = useState('');
   const [errors, setErrors] = useState({});
 
   useEffect(() => { load(); }, []);
@@ -65,6 +73,14 @@ const EditProfileScreen = ({ navigation }) => {
       setUsername(p.username || '');
       setBio(p.bio || '');
       setWebsite(p.website || '');
+      setGender(p.gender || 'prefer-not-to-say');
+      setSizeTop(p.sizeTop || '');
+      setSizeBottom(p.sizeBottom || '');
+      setShoeSize(p.shoeSize || '');
+      setCity(p.city || '');
+      setCountry(p.country || '');
+      setStyleTypesText(Array.isArray(p.styleTypes) ? p.styleTypes.join(', ') : '');
+      setEmail(p.email || '');
     } finally { setLoading(false); }
   };
 
@@ -87,7 +103,25 @@ const EditProfileScreen = ({ navigation }) => {
     if (!validate()) return;
     try {
       setSaving(true);
-      await apiUpdateProfile({ avatar: typeof avatar === 'string' ? avatar : null, fullName: fullName.trim(), username: username.trim().replace('@', ''), bio: bio.trim(), website: website.trim() });
+      await apiUpdateProfile({
+        avatar: typeof avatar === 'string' ? avatar : null,
+        fullName: fullName.trim(),
+        username: username.trim().replace('@', ''),
+        bio: bio.trim(),
+        website: website.trim(),
+        gender,
+        sizeTop: sizeTop.trim(),
+        sizeBottom: sizeBottom.trim(),
+        shoeSize: shoeSize.trim(),
+        city: city.trim(),
+        country: country.trim(),
+        styleTypes: styleTypesText
+          .split(',')
+          .map((item) => String(item || '').trim())
+          .filter(Boolean)
+          .slice(0, 8),
+        onboardingCompleted: true,
+      });
       Alert.alert('Profile updated', 'Your changes have been saved.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (err) {
       Alert.alert('Error', err.message || 'Could not save. Please try again.');
@@ -126,9 +160,16 @@ const EditProfileScreen = ({ navigation }) => {
         <InputRow label="Username"  value={username} onChange={setUsername} placeholder="yourhandle" error={errors.username} theme={theme} />
         <InputRow label="Bio"       value={bio}      onChange={setBio}      placeholder="Tell people about your style..." multiline theme={theme} />
         <InputRow label="Website"   value={website}  onChange={setWebsite}  placeholder="https://yoursite.com" theme={theme} />
+        <InputRow label="Gender" value={gender} onChange={setGender} placeholder="female/male/non-binary/other" theme={theme} />
+        <InputRow label="Top Size" value={sizeTop} onChange={setSizeTop} placeholder="e.g. M" theme={theme} />
+        <InputRow label="Bottom Size" value={sizeBottom} onChange={setSizeBottom} placeholder="e.g. 32" theme={theme} />
+        <InputRow label="Shoe Size" value={shoeSize} onChange={setShoeSize} placeholder="e.g. 42" theme={theme} />
+        <InputRow label="City" value={city} onChange={setCity} placeholder="Your city" theme={theme} />
+        <InputRow label="Country" value={country} onChange={setCountry} placeholder="Your country" theme={theme} />
+        <InputRow label="Style Preferences" value={styleTypesText} onChange={setStyleTypesText} placeholder="streetwear, casual, minimalist" theme={theme} />
         <Text style={[fS.label, { color: theme.text }]}>Email</Text>
         <View style={[fS.wrap, { backgroundColor: theme.card, borderColor: 'transparent', opacity: 0.6 }]}>
-          <Text style={[fS.input, { color: theme.secondaryText }]}>deskworksolution@gmail.com</Text>
+          <Text style={[fS.input, { color: theme.secondaryText }]}>{email || 'Not available'}</Text>
         </View>
         <Text style={{ color: theme.secondaryText, fontSize: 11, marginTop: 5 }}>Email cannot be changed.</Text>
       </ScrollView>

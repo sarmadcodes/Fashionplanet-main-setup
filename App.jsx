@@ -23,7 +23,9 @@ import {
   OnboardingScreen,
   OutfitsScreen,
   PrivacyScreen,
+  RetailerOnboardingScreen,
   RewardsScreen,
+  SavedPostsScreen,
   SettingsScreen,
   SignupScreen,
   SingleOutfitScreen,
@@ -89,12 +91,14 @@ const App = () => {
           <Stack.Screen name="TermsAndPrivacyScreen" component={TermsAndPrivacyScreen} />
           <Stack.Screen name="NotificationsScreen" component={NotificationsScreen} />
           <Stack.Screen name="PrivacyScreen" component={PrivacyScreen} />
+          <Stack.Screen name="RetailerOnboardingScreen" component={RetailerOnboardingScreen} />
           <Stack.Screen name="AccountVisibilityScreen" component={AccountVisibilityScreen} />
           <Stack.Screen name="WeekPlanScreen" component={WeekPlanScreen} />
           <Stack.Screen name="InsightsScreen" component={InsightsScreen} />
           <Stack.Screen name="OutfitsScreen" component={OutfitsScreen} />
           <Stack.Screen name="SingleOutfitScreen" component={SingleOutfitScreen} />
           <Stack.Screen name="RewardsScreen" component={RewardsScreen} />
+          <Stack.Screen name="SavedPostsScreen" component={SavedPostsScreen} />
           <Stack.Screen name="VouchersScreen" component={VouchersScreen} />
           <Stack.Screen name="BgSettingScreen" component={BgSettingScreen} />
           <Stack.Screen name="MyPostsScreen" component={MyPostsScreen} />

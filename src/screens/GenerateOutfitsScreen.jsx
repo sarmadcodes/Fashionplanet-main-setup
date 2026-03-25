@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, StatusBar, Animated, Image, Alert,
+  ScrollView, StatusBar, Animated, Image, Alert, Modal, ActivityIndicator, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useRoute } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
 import { apiGenerateOutfit, apiLogOutfitFeedback } from '../services/apiService';
@@ -60,34 +61,120 @@ const pgStyles = StyleSheet.create({
   fill:  { height: '100%', borderRadius: 3 },
 });
 
-// ── Generating View ───────────────────────────────────────────
-const GeneratingView = ({ theme, percent }) => (
-  <View style={[genStyles.wrap, { backgroundColor: theme.card, borderColor: theme.border }]}>
-    <ShimmerBox w="100%" h={300} r={14} style={{ marginBottom: 20 }} />
-    <View style={{ paddingHorizontal: 2 }}>
-      <ShimmerBox w="52%" h={22} r={6} style={{ marginBottom: 16 }} />
-      <ShimmerBox w="100%" h={13} r={5} style={{ marginBottom: 10 }} />
-      <ShimmerBox w="100%" h={13} r={5} style={{ marginBottom: 10 }} />
-      <ShimmerBox w="76%" h={13} r={5} style={{ marginBottom: 10 }} />
-      <ShimmerBox w="88%" h={13} r={5} style={{ marginBottom: 20 }} />
-      <ShimmerBox w="100%" h={52} r={12} style={{ marginBottom: 12 }} />
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <ShimmerBox w="48%" h={46} r={50} />
-        <ShimmerBox w="48%" h={46} r={50} />
+const CircularLoadingOverlay = ({ theme, percent, width }) => {
+  const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+  const ringSize = Math.max(92, Math.min(136, Math.round(width * 0.29)));
+  const spinnerSize = Math.max(24, Math.round(ringSize * 0.27));
+
+  return (
+    <View style={circleStyles.overlay} pointerEvents="none">
+      <View
+        style={[
+          circleStyles.ringHalo,
+          {
+            width: ringSize + 20,
+            height: ringSize + 20,
+            borderRadius: (ringSize + 20) / 2,
+            backgroundColor: theme.primary + '22',
+          },
+        ]}
+      />
+      <View
+        style={[
+          circleStyles.ring,
+          {
+            width: ringSize,
+            height: ringSize,
+            borderRadius: ringSize / 2,
+            borderColor: theme.primary + '99',
+            backgroundColor: 'rgba(0,0,0,0.46)',
+          },
+        ]}
+      >
+        <ActivityIndicator size={spinnerSize} color={theme.primary} />
+        <Text style={circleStyles.percentText}>{Math.round(clamped)}%</Text>
       </View>
-      <ProgressLine theme={theme} percent={percent} />
+      <View style={[circleStyles.captionPill, { backgroundColor: 'rgba(0,0,0,0.52)', borderColor: theme.primary + '66' }]}>
+        <Text style={circleStyles.loadingLabel}>Generating image...</Text>
+      </View>
     </View>
-  </View>
-);
+  );
+};
+
+const circleStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 8,
+    elevation: 8,
+    gap: 10,
+  },
+  ringHalo: {
+    position: 'absolute',
+  },
+  ring: {
+    borderWidth: 2.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  captionPill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  loadingLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  percentText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+});
+
+// ── Generating View ───────────────────────────────────────────
+const GeneratingView = ({ theme, percent, width }) => {
+  const heroHeight = Math.max(220, Math.min(340, Math.round(width * 0.82)));
+
+  return (
+    <View style={[genStyles.wrap, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <View style={genStyles.heroLoadingWrap}>
+        <ShimmerBox w="100%" h={heroHeight} r={14} style={{ marginBottom: 20 }} />
+        <CircularLoadingOverlay theme={theme} percent={percent} width={width} />
+      </View>
+      <View style={{ paddingHorizontal: 2 }}>
+        <ShimmerBox w="52%" h={22} r={6} style={{ marginBottom: 16 }} />
+        <ShimmerBox w="100%" h={13} r={5} style={{ marginBottom: 10 }} />
+        <ShimmerBox w="100%" h={13} r={5} style={{ marginBottom: 10 }} />
+        <ShimmerBox w="76%" h={13} r={5} style={{ marginBottom: 10 }} />
+        <ShimmerBox w="88%" h={13} r={5} style={{ marginBottom: 20 }} />
+        <ShimmerBox w="100%" h={52} r={12} style={{ marginBottom: 12 }} />
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <ShimmerBox w="48%" h={46} r={50} />
+          <ShimmerBox w="48%" h={46} r={50} />
+        </View>
+        <ProgressLine theme={theme} percent={percent} />
+      </View>
+    </View>
+  );
+};
 
 const genStyles = StyleSheet.create({
   wrap: { borderRadius: 20, borderWidth: 1, padding: 16, marginTop: 24 },
+  heroLoadingWrap: { position: 'relative' },
 });
 
 // ── Result Card ───────────────────────────────────────────────
-const ResultCard = ({ result, mood, weather, theme, onRegenerate, onSave, onWore }) => (
+const ResultCard = ({ result, mood, weather, theme, onRegenerate, onSave, onWore, onOpenFull, onOpenDetails }) => (
   <View style={[rcStyles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-    <View style={rcStyles.imgWrap}>
+    <TouchableOpacity style={rcStyles.imgWrap} activeOpacity={0.9} onPress={onOpenFull}>
       <Image source={{ uri: result.image }} style={rcStyles.img} />
       <View style={[rcStyles.aiOverlay, { backgroundColor: theme.primary }]}>
         <Ionicons name="sparkles" size={11} color="#141414" />
@@ -96,7 +183,10 @@ const ResultCard = ({ result, mood, weather, theme, onRegenerate, onSave, onWore
       <View style={[rcStyles.moodPill, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
         <Text style={rcStyles.moodPillText}>{mood}  ·  {weather}</Text>
       </View>
-    </View>
+      <View style={rcStyles.expandHint}>
+        <Ionicons name="expand-outline" size={15} color="#fff" />
+      </View>
+    </TouchableOpacity>
     <View style={{ padding: 18 }}>
       <Text style={[rcStyles.title, { color: theme.text }]}>{result.title}</Text>
       <Text style={[rcStyles.label, { color: theme.secondaryText }]}>ITEMS IN THIS LOOK</Text>
@@ -128,12 +218,13 @@ const ResultCard = ({ result, mood, weather, theme, onRegenerate, onSave, onWore
           <Ionicons name="refresh-outline" size={16} color={theme.text} />
           <Text style={[rcStyles.outlineBtnText, { color: theme.text }]}>Regenerate</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[rcStyles.outlineBtn, { borderColor: theme.border }]} onPress={onOpenDetails}>
+          <Ionicons name="scan-outline" size={16} color={theme.text} />
+          <Text style={[rcStyles.outlineBtnText, { color: theme.text }]}>Details</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={[rcStyles.outlineBtn, { borderColor: theme.border }]} onPress={onSave}>
           <Ionicons name="bookmark-outline" size={16} color={theme.text} />
           <Text style={[rcStyles.outlineBtnText, { color: theme.text }]}>Save Look</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[rcStyles.shareBtn, { backgroundColor: theme.primary }]}>
-          <Ionicons name="share-social-outline" size={16} color="#141414" />
         </TouchableOpacity>
       </View>
     </View>
@@ -148,6 +239,7 @@ const rcStyles = StyleSheet.create({
   aiOverlayText:  { color: '#141414', fontSize: 10, fontWeight: '800' },
   moodPill:       { position: 'absolute', bottom: 12, right: 12, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 50 },
   moodPillText:   { color: '#fff', fontSize: 11, fontWeight: '700' },
+  expandHint:     { position: 'absolute', bottom: 12, left: 12, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
   title:          { fontSize: 22, fontWeight: '800', marginBottom: 16 },
   label:          { fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 10 },
   itemRow:        { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
@@ -164,11 +256,12 @@ const rcStyles = StyleSheet.create({
   actionsRow:     { flexDirection: 'row', gap: 10, alignItems: 'center' },
   outlineBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 50, borderWidth: 1 },
   outlineBtnText: { fontSize: 12, fontWeight: '600' },
-  shareBtn:       { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });
 
 // ── Main Screen ───────────────────────────────────────────────
 const GenerateOutfitsScreen = ({ navigation }) => {
+  const route = useRoute();
+  const { width } = useWindowDimensions();
   const { isDark } = useTheme();
   const theme = isDark ? darkTheme : lightTheme;
 
@@ -177,38 +270,31 @@ const GenerateOutfitsScreen = ({ navigation }) => {
   const [generating, setGenerating] = useState(false);
   const [percent, setPercent]       = useState(0);
   const [result, setResult]         = useState(null);
+  const [showFullPreview, setShowFullPreview] = useState(false);
   const [prefetchedOutfits, setPrefetchedOutfits] = useState({});
   const timerRef = useRef(null);
+  const startedAtRef = useRef(0);
   const requestRef = useRef(0);
+  const inFlightRef = useRef(false);
+  const autoGenerateRef = useRef('');
 
   const getContextKey = (selectedMood, selectedWeather) => `${selectedMood}:${selectedWeather}`;
 
-  const prefetchOutfit = async (selectedMood, selectedWeather) => {
-    const key = getContextKey(selectedMood, selectedWeather);
-    if (prefetchedOutfits[key]) return;
-
-    try {
-      const prefetched = await apiGenerateOutfit({
-        mood: selectedMood,
-        weather: selectedWeather,
-        isPrefetch: true,
-      });
-      setPrefetchedOutfits((prev) => ({ ...prev, [key]: prefetched }));
-    } catch {
-      // Silent prefetch failure should not block manual generation.
-    }
-  };
-
-  useEffect(() => {
-    prefetchOutfit(mood, weather);
-  }, [mood, weather]);
-
   const startGeneration = async (forceFresh = false) => {
+    if (inFlightRef.current) return;
+
     const key = getContextKey(mood, weather);
     if (!forceFresh && prefetchedOutfits[key]) {
-      setResult(prefetchedOutfits[key]);
+      setGenerating(true);
+      setPercent(100);
+      setTimeout(() => {
+        setResult(prefetchedOutfits[key]);
+        setGenerating(false);
+      }, 350);
       return;
     }
+
+    inFlightRef.current = true;
 
     requestRef.current += 1;
     const requestId = requestRef.current;
@@ -216,15 +302,17 @@ const GenerateOutfitsScreen = ({ navigation }) => {
     setResult(null);
     setPercent(0);
     setGenerating(true);
+    startedAtRef.current = Date.now();
 
-    let p = 0;
     timerRef.current = setInterval(() => {
-      p += Math.floor(Math.random() * 3) + 2;
-      setPercent(Math.min(92, p));
-    }, 160);
+      const elapsed = Date.now() - startedAtRef.current;
+      const estimatedMs = 45000;
+      const progressed = Math.round((elapsed / estimatedMs) * 95);
+      setPercent(Math.max(2, Math.min(95, progressed)));
+    }, 150);
 
     try {
-      const generated = await apiGenerateOutfit({ mood, weather, isPrefetch: false });
+      const generated = await apiGenerateOutfit({ mood, weather, isPrefetch: false, forceFresh });
       if (requestId !== requestRef.current) return;
 
       clearInterval(timerRef.current);
@@ -247,8 +335,34 @@ const GenerateOutfitsScreen = ({ navigation }) => {
           ? 'AI is not configured on the backend yet. Add OPENAI_API_KEY in backend .env and restart the server.'
           : rawMessage
       );
+    } finally {
+      inFlightRef.current = false;
     }
   };
+
+  useEffect(() => {
+    const similarNonce = String(route?.params?.similarNonce || '');
+    if (!similarNonce || autoGenerateRef.current === similarNonce) return;
+
+    autoGenerateRef.current = similarNonce;
+
+    const routeMood = String(route?.params?.initialMood || '').trim();
+    const routeWeather = String(route?.params?.initialWeather || '').trim();
+
+    if (MOODS.includes(routeMood)) {
+      setMood(routeMood);
+    }
+    if (WEATHERS.includes(routeWeather)) {
+      setWeather(routeWeather);
+    }
+
+    setResult(null);
+    setPrefetchedOutfits({});
+
+    setTimeout(() => {
+      startGeneration(true);
+    }, 0);
+  }, [route?.params?.similarNonce]);
 
   useEffect(() => () => { clearInterval(timerRef.current); }, []);
 
@@ -278,6 +392,27 @@ const GenerateOutfitsScreen = ({ navigation }) => {
     });
     setResult(null);
     startGeneration(true);
+  };
+
+  const openDetailScreen = () => {
+    if (!result) return;
+    navigation.navigate('SingleOutfitScreen', {
+      id: result.savedOutfitId || result.generationId || undefined,
+      image: result.image,
+      name: result.title,
+      brand: result.source === 'ai' ? 'AI Generated' : 'Fashion Planet',
+      category: 'AI Outfit',
+      color: 'Mixed',
+      season: weather,
+      source: 'ai',
+      aiMeta: {
+        explanation: result.explanation,
+        weatherNote: result.weatherNote,
+        tips: result.tips || [],
+        occasion: mood,
+        preferredWeather: weather,
+      },
+    });
   };
 
   return (
@@ -326,13 +461,13 @@ const GenerateOutfitsScreen = ({ navigation }) => {
         </View>
 
         {!generating && !result && (
-          <TouchableOpacity style={[styles.genBtn, { backgroundColor: theme.primary }]} onPress={startGeneration} activeOpacity={0.85}>
+          <TouchableOpacity style={[styles.genBtn, { backgroundColor: theme.primary }]} onPress={() => startGeneration(false)} activeOpacity={0.85}>
             <Ionicons name="sparkles" size={18} color="#141414" />
             <Text style={styles.genBtnText}>{prefetchedOutfits[getContextKey(mood, weather)] ? 'Show Ready Outfit' : 'Generate My Outfit'}</Text>
           </TouchableOpacity>
         )}
 
-        {generating && <GeneratingView theme={theme} percent={percent} />}
+        {generating && <GeneratingView theme={theme} percent={percent} width={width} />}
 
         {result && !generating && (
           <ResultCard
@@ -343,9 +478,29 @@ const GenerateOutfitsScreen = ({ navigation }) => {
             onRegenerate={handleRegenerate}
             onSave={() => handleLogFeedback('saved')}
             onWore={() => handleLogFeedback('worn')}
+            onOpenFull={() => setShowFullPreview(true)}
+            onOpenDetails={openDetailScreen}
           />
         )}
       </ScrollView>
+
+      <Modal visible={showFullPreview} animationType="fade" transparent onRequestClose={() => setShowFullPreview(false)}>
+        <View style={styles.previewBackdrop}>
+          <View style={[styles.previewCard, { backgroundColor: theme.card, borderColor: theme.border }]}> 
+            <TouchableOpacity style={styles.previewClose} onPress={() => setShowFullPreview(false)}>
+              <Ionicons name="close" size={20} color="#fff" />
+            </TouchableOpacity>
+            <Image source={{ uri: result?.image }} style={styles.previewImage} resizeMode="contain" />
+            <View style={styles.previewMeta}>
+              <Text style={[styles.previewTitle, { color: theme.text }]}>{result?.title || 'AI Outfit'}</Text>
+              <Text style={[styles.previewText, { color: theme.secondaryText }]}>{result?.explanation || ''}</Text>
+              <TouchableOpacity style={[styles.previewAction, { backgroundColor: theme.primary }]} onPress={() => { setShowFullPreview(false); openDetailScreen(); }}>
+                <Text style={styles.previewActionText}>Open Full Details</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -368,4 +523,13 @@ const styles = StyleSheet.create({
   weatherText:  { fontSize: 12, fontWeight: '600' },
   genBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 54, borderRadius: 50, marginTop: 28 },
   genBtnText:   { color: '#141414', fontSize: 16, fontWeight: '700' },
+  previewBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', paddingHorizontal: 16 },
+  previewCard: { borderWidth: 1, borderRadius: 18, overflow: 'hidden' },
+  previewClose: { position: 'absolute', top: 12, right: 12, zIndex: 2, width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
+  previewImage: { width: '100%', height: 460, backgroundColor: '#0F0F0F' },
+  previewMeta: { padding: 14 },
+  previewTitle: { fontSize: 16, fontWeight: '700', marginBottom: 6 },
+  previewText: { fontSize: 12, lineHeight: 18 },
+  previewAction: { marginTop: 12, alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
+  previewActionText: { color: '#141414', fontWeight: '700', fontSize: 12 },
 });

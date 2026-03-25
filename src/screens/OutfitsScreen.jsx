@@ -2,9 +2,10 @@ import { StatusBar, StyleSheet, Text, View, ScrollView, TouchableOpacity, Image 
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useRoute } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchOutfits } from '../services/apiService';
+import { apiFetchAiOutfits, apiFetchOutfits } from '../services/apiService';
 
 const OutfitCard = ({ item, theme, onPress }) => (
   <TouchableOpacity
@@ -15,7 +16,7 @@ const OutfitCard = ({ item, theme, onPress }) => (
     <Image source={{ uri: item.image }} style={styles.cardImage} />
 
     <View style={styles.tagsOverlay}>
-      {item.tags.map(t => (
+      {(Array.isArray(item.tags) ? item.tags : []).map(t => (
         <View key={t} style={styles.tagPill}>
           <Text style={styles.tagText}>{t}</Text>
         </View>
@@ -35,29 +36,52 @@ const OutfitCard = ({ item, theme, onPress }) => (
 );
 
 const OutfitsScreen = ({ navigation }) => {
+  const route = useRoute();
   const { isDark } = useTheme();
   const theme = isDark ? darkTheme : lightTheme;
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
+  const routeAiOnly = String(route?.params?.filter || '').toLowerCase() === 'ai';
+  const routeAiSubtype = String(route?.params?.filterSubtype || '').toLowerCase();
+  const [showAiOnly, setShowAiOnly] = useState(routeAiOnly);
 
   useEffect(() => {
-    apiFetchOutfits()
+    setShowAiOnly(routeAiOnly);
+  }, [routeAiOnly]);
+
+  useEffect(() => {
+    setLoading(true);
+    const fetcher = showAiOnly ? apiFetchAiOutfits : apiFetchOutfits;
+    fetcher()
       .then((data) => {
-        setOutfits(data);
+        let next = data;
+        if (showAiOnly && routeAiSubtype === 'avatar') {
+          next = (data || []).filter((item) => String(item?.aiMeta?.occasion || '').toLowerCase() === 'style-avatar');
+        }
+        if (showAiOnly && routeAiSubtype === 'outfit') {
+          next = (data || []).filter((item) => String(item?.aiMeta?.occasion || '').toLowerCase() !== 'style-avatar');
+        }
+        setOutfits(next || []);
+      })
+      .catch(() => {
+        setOutfits([]);
       })
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [showAiOnly, routeAiSubtype]);
 
   const handlePress = (item) => {
     navigation.navigate('SingleOutfitScreen', {
+      id: item.id,
       image: item.image,
       name: item.title,
       brand: item.brand,
       category: item.category,
       color: item.color,
       season: item.season,
+      source: item.source,
+      aiMeta: item.aiMeta,
     });
   };
 
@@ -72,13 +96,14 @@ const OutfitsScreen = ({ navigation }) => {
             <View>
               <Text style={[styles.heading, { color: theme.text }]}>Outfits</Text>
               <Text style={[styles.subheading, { color: theme.secondaryText }]}>
-                {loading ? 'Loading looks...' : `${outfits.length} looks saved`}
+                {loading ? 'Loading looks...' : `${outfits.length} ${showAiOnly ? 'AI' : ''} looks saved`}
               </Text>
             </View>
             <TouchableOpacity
               style={[styles.filterBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
+              onPress={() => setShowAiOnly((prev) => !prev)}
             >
-              <Ionicons name="options-outline" size={20} color={theme.text} />
+              <Ionicons name={showAiOnly ? 'sparkles-outline' : 'options-outline'} size={20} color={theme.text} />
             </TouchableOpacity>
           </View>
 

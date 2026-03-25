@@ -1,15 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, StatusBar, Animated, Image,
   Alert,
+  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
 import { STYLE_AVATAR_TYPES } from '../config/uiOptions';
+import { apiGenerateStyleAvatar } from '../services/apiService';
 
 const STYLE_TYPES = STYLE_AVATAR_TYPES;
 
@@ -53,14 +55,94 @@ const pgStyles = StyleSheet.create({
   fill:  { height: '100%', borderRadius: 3 },
 });
 
+const CircularLoadingOverlay = ({ theme, percent, width }) => {
+  const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+  const ringSize = Math.max(92, Math.min(136, Math.round(width * 0.29)));
+  const spinnerSize = Math.max(24, Math.round(ringSize * 0.27));
+
+  return (
+    <View style={circleStyles.overlay} pointerEvents="none">
+      <View
+        style={[
+          circleStyles.ringHalo,
+          {
+            width: ringSize + 20,
+            height: ringSize + 20,
+            borderRadius: (ringSize + 20) / 2,
+            backgroundColor: theme.primary + '22',
+          },
+        ]}
+      />
+      <View
+        style={[
+          circleStyles.ring,
+          {
+            width: ringSize,
+            height: ringSize,
+            borderRadius: ringSize / 2,
+            borderColor: theme.primary + '99',
+            backgroundColor: 'rgba(0,0,0,0.46)',
+          },
+        ]}
+      >
+        <ActivityIndicator size={spinnerSize} color={theme.primary} />
+        <Text style={circleStyles.percentText}>{Math.round(clamped)}%</Text>
+      </View>
+      <View style={[circleStyles.captionPill, { backgroundColor: 'rgba(0,0,0,0.52)', borderColor: theme.primary + '66' }]}>
+        <Text style={circleStyles.loadingLabel}>Generating image...</Text>
+      </View>
+    </View>
+  );
+};
+
+const circleStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 8,
+    elevation: 8,
+    gap: 10,
+  },
+  ringHalo: {
+    position: 'absolute',
+  },
+  ring: {
+    borderWidth: 2.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  captionPill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  loadingLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  percentText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+});
+
 const StyleAvatarScreen = ({ navigation }) => {
   const { isDark } = useTheme();
   const theme = isDark ? darkTheme : lightTheme;
+  const { width } = useWindowDimensions();
 
   const [selectedStyles, setSelectedStyles] = useState([]);
   const [loading, setLoading]               = useState(false);
   const [percent, setPercent]               = useState(0);
   const [avatarDone, setAvatarDone]         = useState(false);
+  const [avatarResult, setAvatarResult]     = useState(null);
   const timerRef = useRef(null);
 
   useEffect(() => () => { clearInterval(timerRef.current); }, []);
@@ -68,40 +150,82 @@ const StyleAvatarScreen = ({ navigation }) => {
   const toggleStyle = (id) => {
     setSelectedStyles(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
     setAvatarDone(false);
+    setAvatarResult(null);
   };
 
-  const buildAvatar = () => {
-    if (selectedStyles.length === 0) return;
-    setAvatarDone(false);
-    setPercent(0);
-    setLoading(true);
-    let p = 0;
+  const startProgress = () => {
+    let p = 6;
+    setPercent(p);
+    clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
-      p += Math.floor(Math.random() * 3) + 2;
-      if (p >= 100) {
-        p = 100;
-        setPercent(100);
-        clearInterval(timerRef.current);
-        setTimeout(() => { setLoading(false); setAvatarDone(true); }, 400);
-      } else {
-        setPercent(p);
+      p += Math.floor(Math.random() * 5) + 3;
+      if (p >= 92) {
+        p = 92;
       }
+      setPercent(p);
     }, 140);
   };
 
-  const avatarImages = selectedStyles.map(id => STYLE_TYPES.find(s => s.id === id)).filter(Boolean);
+  const stopProgress = () => {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  };
 
-  const handleSaveAvatar = async () => {
+  const buildAvatar = async (forceFresh = false) => {
+    if (selectedStyles.length === 0 || loading) return;
+
     const styleLabels = selectedStyles
       .map((id) => STYLE_TYPES.find((s) => s.id === id)?.label)
       .filter(Boolean);
 
+    setAvatarDone(false);
+    setAvatarResult(null);
+    setLoading(true);
+    startProgress();
+
     try {
-      await AsyncStorage.setItem('user_style_types', JSON.stringify(styleLabels));
-      Alert.alert('Avatar Saved', `Your style types (${styleLabels.join(', ')}) have been saved.`);
-    } catch {
-      Alert.alert('Error', 'Could not save avatar. Try again.');
+      const result = await apiGenerateStyleAvatar({ styleTypes: styleLabels, forceFresh });
+      stopProgress();
+      setPercent(100);
+
+      setAvatarResult({
+        image: result.generatedImage,
+        title: result.title,
+        styleTypes: result.styleTypes,
+        savedOutfitId: result.savedOutfitId,
+        generationId: result.generationId,
+        cacheHit: result.cacheHit,
+      });
+      setAvatarDone(Boolean(result.generatedImage));
+      setTimeout(() => { setLoading(false); }, 220);
+    } catch (error) {
+      stopProgress();
+      setLoading(false);
+      setAvatarDone(false);
+      setPercent(0);
+      Alert.alert('Generation Failed', error?.message || 'Could not generate style avatar right now.');
     }
+  };
+
+  const handleOpenSavedAvatar = () => {
+    if (!avatarResult?.image) return;
+
+    navigation.navigate('SingleOutfitScreen', {
+      id: avatarResult.savedOutfitId || avatarResult.generationId || undefined,
+      image: avatarResult.image,
+      name: avatarResult.title || 'Style Avatar',
+      brand: 'AI Generated',
+      category: 'AI Avatar',
+      color: 'Mixed',
+      season: 'All Season',
+      source: 'ai',
+      aiMeta: {
+        occasion: 'style-avatar',
+        explanation: avatarResult.styleTypes?.length
+          ? `Generated from selected styles: ${avatarResult.styleTypes.join(', ')}.`
+          : 'AI style avatar.',
+      },
+    });
   };
 
   return (
@@ -152,7 +276,7 @@ const StyleAvatarScreen = ({ navigation }) => {
         {!loading && !avatarDone && (
           <TouchableOpacity
             style={[styles.buildBtn, { backgroundColor: selectedStyles.length > 0 ? theme.primary : theme.card, opacity: selectedStyles.length > 0 ? 1 : 0.5 }]}
-            onPress={buildAvatar}
+            onPress={() => buildAvatar(false)}
             disabled={selectedStyles.length === 0 || loading}
             activeOpacity={0.85}
           >
@@ -166,7 +290,10 @@ const StyleAvatarScreen = ({ navigation }) => {
         {/* Loading — shimmer + progress line */}
         {loading && (
           <View style={[styles.loadingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <ShimmerBox w="100%" h={300} r={14} style={{ marginBottom: 16 }} />
+            <View style={styles.heroLoadingWrap}>
+              <ShimmerBox w="100%" h={300} r={14} style={{ marginBottom: 16 }} />
+              <CircularLoadingOverlay theme={theme} percent={percent} width={width} />
+            </View>
             <ShimmerBox w="54%" h={18} r={6} style={{ marginBottom: 10 }} />
             <ShimmerBox w="100%" h={12} r={5} style={{ marginBottom: 8 }} />
             <ShimmerBox w="86%" h={12} r={5} style={{ marginBottom: 8 }} />
@@ -187,23 +314,29 @@ const StyleAvatarScreen = ({ navigation }) => {
               <Text style={[styles.resultHeaderText, { color: theme.primary }]}>Your style avatar is ready</Text>
             </View>
 
-            <View style={styles.avatarGrid}>
-              {avatarImages.map((style, i) => (
-                <View key={i} style={[styles.avatarCard, { borderColor: style.color }]}>
-                  <Image source={{ uri: style.image }} style={styles.avatarImg} />
-                  <View style={[styles.avatarOverlay, { backgroundColor: style.color + 'CC' }]}>
-                    <Text style={styles.avatarOverlayText}>{style.label}</Text>
-                  </View>
-                </View>
-              ))}
+            <View style={[styles.avatarCardWide, { borderColor: theme.border, backgroundColor: theme.card }]}> 
+              <Image source={{ uri: avatarResult?.image }} style={styles.avatarImgWide} />
+              <View style={styles.avatarOverlayWide}>
+                <Text style={styles.avatarOverlayTitle}>{avatarResult?.title || 'Style Avatar'}</Text>
+                <Text style={styles.avatarOverlaySubtitle} numberOfLines={2}>
+                  {(avatarResult?.styleTypes || []).join(' • ') || 'AI generated avatar'}
+                </Text>
+              </View>
             </View>
 
+            {avatarResult?.cacheHit && (
+              <View style={[styles.cacheBadge, { backgroundColor: theme.primary + '1F', borderColor: theme.primary }]}> 
+                <Ionicons name="flash-outline" size={13} color={theme.primary} />
+                <Text style={[styles.cacheBadgeText, { color: theme.primary }]}>Loaded from recent generation cache</Text>
+              </View>
+            )}
+
             <View style={styles.rebuiltActions}>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: theme.primary }]} onPress={handleSaveAvatar}> 
-                <Ionicons name="bookmark-outline" size={16} color="#141414" />
-                <Text style={styles.saveBtnText}>Save Avatar</Text>
+              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: theme.primary }]} onPress={handleOpenSavedAvatar}> 
+                <Ionicons name="open-outline" size={16} color="#141414" />
+                <Text style={styles.saveBtnText}>View Saved Avatar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.outlineBtn, { borderColor: theme.border }]} onPress={buildAvatar}>
+              <TouchableOpacity style={[styles.outlineBtn, { borderColor: theme.border }]} onPress={() => buildAvatar(true)}>
                 <Ionicons name="refresh-outline" size={16} color={theme.text} />
                 <Text style={[styles.outlineBtnText, { color: theme.text }]}>Rebuild</Text>
               </TouchableOpacity>
@@ -233,13 +366,16 @@ const styles = StyleSheet.create({
   buildBtn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 54, borderRadius: 50, marginBottom: 24 },
   buildBtnText:     { fontSize: 15, fontWeight: '700' },
   loadingCard:      { borderRadius: 16, borderWidth: 1, padding: 14, marginBottom: 20 },
+  heroLoadingWrap:  { position: 'relative' },
   resultHeader:     { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 16 },
   resultHeaderText: { fontSize: 13, fontWeight: '700' },
-  avatarGrid:       { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },
-  avatarCard:       { width: '47%', borderRadius: 14, overflow: 'hidden', borderWidth: 0.5 },
-  avatarImg:        { width: '100%', height: 200, resizeMode: 'cover' },
-  avatarOverlay:    { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8 },
-  avatarOverlayText:{ color: '#fff', fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  avatarCardWide:   { borderRadius: 16, overflow: 'hidden', borderWidth: 1, marginBottom: 12 },
+  avatarImgWide:    { width: '100%', height: 360, resizeMode: 'cover' },
+  avatarOverlayWide:{ padding: 12, backgroundColor: 'rgba(10,10,10,0.56)' },
+  avatarOverlayTitle:{ color: '#fff', fontSize: 14, fontWeight: '800', marginBottom: 4 },
+  avatarOverlaySubtitle:{ color: '#EEE', fontSize: 12, fontWeight: '600' },
+  cacheBadge:       { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 16, alignSelf: 'flex-start' },
+  cacheBadgeText:   { fontSize: 11, fontWeight: '700' },
   rebuiltActions:   { flexDirection: 'row', gap: 10, marginBottom: 20 },
   saveBtn:          { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 50 },
   saveBtnText:      { color: '#141414', fontWeight: '700', fontSize: 13 },

@@ -21,6 +21,21 @@ import apiClient, { getActiveApiBaseUrl } from './apiClient';
 
 const delay = () => Promise.resolve();
 
+const toAbsoluteUrl = (value) => {
+  if (typeof value !== 'string') return value;
+  const raw = value.trim();
+  if (!raw) return raw;
+
+  if (/^(https?:|file:|content:|data:)/i.test(raw)) {
+    return raw;
+  }
+
+  const apiBase = getActiveApiBaseUrl() || '';
+  const hostBase = apiBase.replace(/\/api\/?$/i, '');
+  const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
+  return `${hostBase}${normalizedPath}`;
+};
+
 const getApiErrorMessage = (error, fallback) => {
   if (error?.userMessage) {
     return error.userMessage;
@@ -54,7 +69,7 @@ const normalizeWardrobeItem = (item) => ({
   color: item.color,
   season: item.season,
   worth: Number(item.worth) || 0,
-  image: item.image,
+  image: toAbsoluteUrl(item.image),
   wearCount: item.wearCount || 0,
   createdAt: item.createdAt,
   title: item.name,
@@ -67,9 +82,9 @@ const normalizePost = (post) => {
   if (!id) return null;
 
   const images = Array.isArray(post.images)
-    ? post.images
+    ? post.images.map(toAbsoluteUrl).filter(Boolean)
     : post.image
-      ? [post.image?.uri || post.image]
+      ? [toAbsoluteUrl(post.image?.uri || post.image)].filter(Boolean)
       : [];
 
   return {
@@ -107,7 +122,19 @@ export const apiLogin = async ({ email, password }) => {
   }
 };
 
-export const apiSignup = async ({ fullName, email, password }) => {
+export const apiSignup = async ({
+  fullName,
+  email,
+  password,
+  gender,
+  sizeTop,
+  sizeBottom,
+  shoeSize,
+  city,
+  country,
+  location,
+  styleTypes,
+}) => {
   if (!fullName?.trim()) throw new Error('Full name is required.');
   if (!email?.trim()) throw new Error('Email address is required.');
   if (!password || password.length < 6)
@@ -117,6 +144,14 @@ export const apiSignup = async ({ fullName, email, password }) => {
       fullName: fullName.trim(),
       email: email.trim().toLowerCase(),
       password,
+      gender: gender || 'prefer-not-to-say',
+      sizeTop: sizeTop || '',
+      sizeBottom: sizeBottom || '',
+      shoeSize: shoeSize || '',
+      city: city || '',
+      country: country || '',
+      location: location || null,
+      styleTypes: Array.isArray(styleTypes) ? styleTypes : [],
     });
     return data;
   } catch (error) {
@@ -142,7 +177,10 @@ export const apiDeleteAccount = async () => {
 export const apiFetchProfile = async () => {
   try {
     const { data } = await apiClient.get('/profile');
-    return data.user;
+    return {
+      ...data.user,
+      avatar: toAbsoluteUrl(data?.user?.avatar),
+    };
   } catch (error) {
     const message =
       error?.response?.data?.message ||
@@ -158,6 +196,17 @@ export const apiUpdateProfile = async (data) => {
     formData.append('username', data.username || '');
     formData.append('bio', data.bio || '');
     formData.append('website', data.website || '');
+    formData.append('gender', data.gender || 'prefer-not-to-say');
+    formData.append('sizeTop', data.sizeTop || '');
+    formData.append('sizeBottom', data.sizeBottom || '');
+    formData.append('shoeSize', data.shoeSize || '');
+    formData.append('city', data.city || '');
+    formData.append('country', data.country || '');
+    formData.append('locationLat', data.locationLat ?? '');
+    formData.append('locationLon', data.locationLon ?? '');
+    formData.append('locationLabel', data.locationLabel || '');
+    formData.append('styleTypes', Array.isArray(data.styleTypes) ? data.styleTypes.join(',') : (data.styleTypes || ''));
+    formData.append('onboardingCompleted', String(Boolean(data.onboardingCompleted ?? true)));
 
     if (data.avatar?.startsWith?.('http')) {
       formData.append('avatar', data.avatar);
@@ -172,7 +221,10 @@ export const apiUpdateProfile = async (data) => {
     const { data: response } = await apiClient.patch('/profile', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
-    return response.user;
+    return {
+      ...response.user,
+      avatar: toAbsoluteUrl(response?.user?.avatar),
+    };
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Could not update profile.'));
   }
@@ -371,10 +423,10 @@ export const apiToggleSavePost = async (postId) => {
 export const apiFetchSavedPosts = async () => {
   try {
     const { data } = await apiClient.get('/posts/saved');
-    return data?.data || [];
+    return (data?.data || []).map(normalizePost).filter(Boolean);
   } catch (err) {
     await delay(800);
-    return getSavedPosts();
+    return getSavedPosts().map(normalizePost).filter(Boolean);
   }
 };
 
@@ -411,7 +463,8 @@ const normalizeAiItem = (item) => ({
 const toLegacyAiCardShape = (payload) => {
   const outfit = payload?.outfit || {};
   const detailItems = Array.isArray(outfit.itemDetails) ? outfit.itemDetails.map(normalizeAiItem) : [];
-  const firstImage = detailItems.find((i) => i.image)?.image || 'https://images.pexels.com/photos/298863/pexels-photo-298863.jpeg';
+  const generatedImage = typeof payload?.generatedImage === 'string' ? payload.generatedImage.trim() : '';
+  const firstImage = generatedImage || detailItems.find((i) => i.image)?.image || 'https://images.pexels.com/photos/298863/pexels-photo-298863.jpeg';
   const tips = Array.isArray(payload?.tips) ? payload.tips : [];
   const newSuggestion = outfit?.newSuggestion && typeof outfit.newSuggestion === 'object'
     ? {
@@ -423,6 +476,8 @@ const toLegacyAiCardShape = (payload) => {
 
   return {
     generationId: payload?.generationId || null,
+    savedOutfitId: payload?.savedOutfitId || null,
+    source: payload?.source || 'ai',
     isFallback: Boolean(payload?.isFallback),
     fallbackReason: payload?.fallbackReason || null,
     fallbackNote: payload?.fallbackNote || null,
@@ -442,7 +497,7 @@ const toLegacyAiCardShape = (payload) => {
   };
 };
 
-export const apiGenerateOutfit = async ({ mood, weather, lat = 24.8607, lon = 67.0011, isPrefetch = false }) => {
+export const apiGenerateOutfit = async ({ mood, weather, lat = 24.8607, lon = 67.0011, isPrefetch = false, forceFresh = false }) => {
   try {
     const { data } = await apiClient.post('/ai/generate-outfit', {
       occasion: mood || 'casual',
@@ -450,11 +505,38 @@ export const apiGenerateOutfit = async ({ mood, weather, lat = 24.8607, lon = 67
       lat,
       lon,
       isPrefetch,
+      forceFresh,
+    }, {
+      timeout: 120000,
     });
 
     return toLegacyAiCardShape(data?.data || {});
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Could not generate outfit right now.'));
+  }
+};
+
+export const apiGenerateStyleAvatar = async ({ styleTypes = [], forceFresh = false }) => {
+  try {
+    const { data } = await apiClient.post('/ai/generate-style-avatar', {
+      styleTypes,
+      forceFresh,
+    }, {
+      timeout: 120000,
+    });
+
+    const payload = data?.data || {};
+    return {
+      generationId: payload?.generationId || null,
+      savedOutfitId: payload?.savedOutfitId || null,
+      source: payload?.source || 'ai',
+      title: payload?.title || 'Style Avatar',
+      styleTypes: Array.isArray(payload?.styleTypes) ? payload.styleTypes : [],
+      generatedImage: toAbsoluteUrl(payload?.generatedImage || null),
+      cacheHit: Boolean(payload?.cacheHit),
+    };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not generate style avatar right now.'));
   }
 };
 
@@ -489,43 +571,65 @@ export const apiFetchWardrobeInsights = async () => {
 // ── REWARDS ───────────────────────────────────────────────────
 
 export const apiFetchRewards = async () => {
-  await delay(1300);
-  return {
-    points: 850,
-    nextThreshold: 1000,
-    history: [
-      { id: 1, action: 'Uploaded outfit photo',   points: 20, date: '2 days ago'  },
-      { id: 2, action: 'Post reached 10 likes',   points: 50, date: '3 days ago'  },
-      { id: 3, action: 'Completed weekly plan',   points: 50, date: '5 days ago'  },
-      { id: 4, action: 'Shared with a friend',    points: 30, date: '1 week ago'  },
-      { id: 5, action: 'Added 5 wardrobe items',  points: 25, date: '1 week ago'  },
-    ],
-    activities: [
-      { id: 1, title: 'Upload a daily outfit',      points: '+20', icon: 'camera'       },
-      { id: 2, title: 'Complete your week plan',    points: '+50', icon: 'calendar'     },
-      { id: 3, title: 'Share a look with friends',  points: '+30', icon: 'share-variant' },
-      { id: 4, title: 'Reach 10 likes on a post',   points: '+40', icon: 'heart-outline'        },
-    ],
-  };
+  try {
+    const { data } = await apiClient.get('/rewards');
+    return data?.rewards || {
+      points: 0,
+      nextThreshold: 500,
+      history: [],
+      activities: [],
+    };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Failed to load rewards.'));
+  }
 };
 
 // ── VOUCHERS ──────────────────────────────────────────────────
 
 export const apiFetchVouchers = async () => {
-  await delay(1200);
-  return [
-    { id: 'v1', store: 'ZARA',  amount: '$20 OFF', code: 'ZARA-9921-X', expiry: 'Expires 30 Sep 2026', unlocked: true },
-    { id: 'v2', store: 'M & S', amount: '15% OFF', code: 'MS-LUXE-22',  expiry: 'Expires 15 Nov 2026', unlocked: true },
-    { id: 'v3', store: 'H&M',   amount: '$10 OFF', code: 'HM-SALE-00',  expiry: 'Expires 28 Feb 2027', unlocked: false, pointsRequired: 1200 },
-  ];
+  try {
+    const { data } = await apiClient.get('/vouchers');
+    return data?.vouchers || [];
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Failed to load vouchers.'));
+  }
+};
+
+export const apiRedeemVoucher = async (voucherId) => {
+  if (!voucherId) throw new Error('Voucher id is required.');
+  try {
+    const { data } = await apiClient.post(`/vouchers/${voucherId}/redeem`);
+    return data?.voucher;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not redeem voucher.'));
+  }
 };
 
 export const apiFetchOutfits = async () => {
   try {
     const { data } = await apiClient.get('/outfits');
-    return data.outfits || [];
+    return (data.outfits || []).map((item) => ({
+      ...item,
+      id: String(item.id || item._id || `${item.title || 'outfit'}_${item.createdAt || ''}_${item.image || ''}`),
+      image: toAbsoluteUrl(item.image),
+    }));
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Failed to load outfits.'));
+  }
+};
+
+export const apiFetchAiOutfits = async () => {
+  try {
+    const { data } = await apiClient.get('/outfits/ai');
+    return (data.outfits || []).map((item) => ({
+      ...item,
+      id: String(item.id || item._id || `${item.title || 'ai_outfit'}_${item.createdAt || ''}_${item.image || ''}`),
+      image: toAbsoluteUrl(item.image),
+      source: item.source || 'ai',
+      aiMeta: item.aiMeta || null,
+    }));
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Failed to load AI outfits.'));
   }
 };
 
@@ -573,9 +677,62 @@ export const apiAddWeekPlanItem = async (day, item) => {
 export const apiFetchHomeData = async () => {
   try {
     const { data } = await apiClient.get('/home');
-    return data.home;
+    return {
+      ...(data.home || {}),
+      featuredProducts: Array.isArray(data?.home?.featuredProducts)
+        ? data.home.featuredProducts.map((item) => ({
+          ...item,
+          image: toAbsoluteUrl(item?.image),
+        }))
+        : [],
+    };
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Failed to load dashboard.'));
+  }
+};
+
+export const apiFetchRetailerProducts = async () => {
+  try {
+    const { data } = await apiClient.get('/retailers/products/mine');
+    return (data?.products || []).map((item) => ({
+      ...item,
+      image: toAbsoluteUrl(item?.image),
+    }));
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Failed to load retailer products.'));
+  }
+};
+
+export const apiCreateRetailerProduct = async (payload) => {
+  try {
+    const { data } = await apiClient.post('/retailers/products', payload);
+    return {
+      ...(data?.product || {}),
+      image: toAbsoluteUrl(data?.product?.image),
+    };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not create retailer product.'));
+  }
+};
+
+export const apiUpdateRetailerProduct = async (productId, payload) => {
+  try {
+    const { data } = await apiClient.patch(`/retailers/products/${productId}`, payload);
+    return {
+      ...(data?.product || {}),
+      image: toAbsoluteUrl(data?.product?.image),
+    };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not update retailer product.'));
+  }
+};
+
+export const apiDeleteRetailerProduct = async (productId) => {
+  try {
+    const { data } = await apiClient.delete(`/retailers/products/${productId}`);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not delete retailer product.'));
   }
 };
 
@@ -606,5 +763,72 @@ export const apiDeletePost = async (postId) => {
     return data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Could not delete post.'));
+  }
+};
+
+export const apiGenerateVirtualTryOn = async ({ itemId, forceFresh = false }) => {
+  if (!itemId) throw new Error('Please select a wardrobe item first.');
+
+  try {
+    const { data } = await apiClient.post('/ai/virtual-try-on', {
+      itemId,
+      forceFresh,
+    }, {
+      timeout: 120000,
+    });
+
+    const payload = data?.data || {};
+    return {
+      generationId: payload?.generationId || null,
+      savedOutfitId: payload?.savedOutfitId || null,
+      itemId: payload?.itemId || itemId,
+      itemName: payload?.itemName || 'Wardrobe Item',
+      title: payload?.title || 'Virtual Try-On',
+      generatedImage: toAbsoluteUrl(payload?.generatedImage || null),
+      cacheHit: Boolean(payload?.cacheHit),
+    };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not generate virtual try-on right now.'));
+  }
+};
+
+export const apiSubmitRetailerApplication = async ({
+  brandName,
+  contactName,
+  contactEmail,
+  contactPhone,
+  website,
+  categories,
+  description,
+}) => {
+  if (!String(brandName || '').trim()) throw new Error('Brand name is required.');
+  if (!String(contactName || '').trim()) throw new Error('Contact name is required.');
+  if (!String(contactEmail || '').trim()) throw new Error('Contact email is required.');
+
+  try {
+    const { data } = await apiClient.post('/retailers/apply', {
+      brandName: String(brandName || '').trim(),
+      contactName: String(contactName || '').trim(),
+      contactEmail: String(contactEmail || '').trim().toLowerCase(),
+      contactPhone: String(contactPhone || '').trim(),
+      website: String(website || '').trim(),
+      categories: Array.isArray(categories)
+        ? categories
+        : String(categories || '').split(',').map((v) => String(v || '').trim()).filter(Boolean),
+      description: String(description || '').trim(),
+    });
+
+    return data?.retailerApplication || null;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not submit retailer application.'));
+  }
+};
+
+export const apiFetchMyRetailerApplication = async () => {
+  try {
+    const { data } = await apiClient.get('/retailers/me');
+    return data?.retailerApplication || null;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Could not load retailer application status.'));
   }
 };

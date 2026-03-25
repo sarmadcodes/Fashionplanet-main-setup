@@ -17,6 +17,8 @@ export { default as OutfitsScreen } from './OutfitsScreen';
 export { default as PrivacyScreen } from './PrivacyScreen';
 export { default as ProfileScreen } from './ProfileScreen';
 export { default as RewardsScreen } from './RewardsScreen';
+export { default as RetailerOnboardingScreen } from './RetailerOnboardingScreen';
+export { default as SavedPostsScreen } from './SavedPostsScreen';
 export { default as SettingsScreen } from './SettingsScreen';
 export { default as SignupScreen } from './SignupScreen';
 export { default as SingleOutfitScreen } from './SingleOutfitScreen';

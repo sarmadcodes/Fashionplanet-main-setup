@@ -17,6 +17,13 @@ const SignupScreen = ({ navigation }) => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
+  const [gender, setGender] = useState('prefer-not-to-say');
+  const [sizeTop, setSizeTop] = useState('');
+  const [sizeBottom, setSizeBottom] = useState('');
+  const [shoeSize, setShoeSize] = useState('');
+  const [city, setCity] = useState('');
+  const [country, setCountry] = useState('');
+  const [styleTypesText, setStyleTypesText] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [agreed, setAgreed]     = useState(false);
   const [loading, setLoading]   = useState(false);
@@ -41,7 +48,22 @@ const SignupScreen = ({ navigation }) => {
     if (!validate()) return;
     try {
       setLoading(true);
-      await apiSignup({ fullName: fullName.trim(), email: email.trim(), password });
+      await apiSignup({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        password,
+        gender,
+        sizeTop: sizeTop.trim(),
+        sizeBottom: sizeBottom.trim(),
+        shoeSize: shoeSize.trim(),
+        city: city.trim(),
+        country: country.trim(),
+        styleTypes: styleTypesText
+          .split(',')
+          .map((item) => String(item || '').trim())
+          .filter(Boolean)
+          .slice(0, 8),
+      });
       setShowSuccessModal(true);
     } catch (err) {
       setError(err.message);
@@ -135,6 +157,103 @@ const SignupScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         {fieldErrors.password ? <Text style={styles.fieldError}>{fieldErrors.password}</Text> : null}
+
+        <Text style={[styles.label, { color: theme.text }]}>Onboarding Profile</Text>
+        <View style={styles.chipRow}>
+          {[
+            { label: 'Female', value: 'female' },
+            { label: 'Male', value: 'male' },
+            { label: 'Other', value: 'other' },
+          ].map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.chip,
+                { borderColor: theme.border, backgroundColor: theme.card },
+                gender === option.value && { borderColor: theme.primary, backgroundColor: `${theme.primary}22` },
+              ]}
+              onPress={() => setGender(option.value)}
+            >
+              <Text style={[styles.chipText, { color: theme.text }]}>{option.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.rowInputs}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: theme.text }]}>Top Size</Text>
+            <View style={[styles.inputWrap, { backgroundColor: theme.card }]}> 
+              <TextInput
+                style={[styles.inputField, { color: theme.text }]}
+                placeholder="e.g. M"
+                placeholderTextColor={theme.secondaryText}
+                value={sizeTop}
+                onChangeText={setSizeTop}
+              />
+            </View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: theme.text }]}>Bottom Size</Text>
+            <View style={[styles.inputWrap, { backgroundColor: theme.card }]}> 
+              <TextInput
+                style={[styles.inputField, { color: theme.text }]}
+                placeholder="e.g. 32"
+                placeholderTextColor={theme.secondaryText}
+                value={sizeBottom}
+                onChangeText={setSizeBottom}
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.rowInputs}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: theme.text }]}>Shoe Size</Text>
+            <View style={[styles.inputWrap, { backgroundColor: theme.card }]}> 
+              <TextInput
+                style={[styles.inputField, { color: theme.text }]}
+                placeholder="e.g. 42"
+                placeholderTextColor={theme.secondaryText}
+                value={shoeSize}
+                onChangeText={setShoeSize}
+              />
+            </View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: theme.text }]}>City</Text>
+            <View style={[styles.inputWrap, { backgroundColor: theme.card }]}> 
+              <TextInput
+                style={[styles.inputField, { color: theme.text }]}
+                placeholder="Your city"
+                placeholderTextColor={theme.secondaryText}
+                value={city}
+                onChangeText={setCity}
+              />
+            </View>
+          </View>
+        </View>
+
+        <Text style={[styles.label, { color: theme.text }]}>Country</Text>
+        <View style={[styles.inputWrap, { backgroundColor: theme.card }]}> 
+          <TextInput
+            style={[styles.inputField, { color: theme.text }]}
+            placeholder="Your country"
+            placeholderTextColor={theme.secondaryText}
+            value={country}
+            onChangeText={setCountry}
+          />
+        </View>
+
+        <Text style={[styles.label, { color: theme.text }]}>Style Preferences (comma separated)</Text>
+        <View style={[styles.inputWrap, { backgroundColor: theme.card }]}> 
+          <TextInput
+            style={[styles.inputField, { color: theme.text }]}
+            placeholder="streetwear, minimalist, casual"
+            placeholderTextColor={theme.secondaryText}
+            value={styleTypesText}
+            onChangeText={setStyleTypesText}
+          />
+        </View>
 
         {/* Terms */}
         <TouchableOpacity
@@ -235,6 +354,10 @@ const styles = StyleSheet.create({
   dividerText: { paddingHorizontal: 12, fontSize: 12 },
   socialRow:   { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 28 },
   socialBtn:   { width: '30%', height: 48, borderWidth: 1, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  rowInputs:   { flexDirection: 'row', gap: 10 },
+  chipRow:     { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  chip:        { borderWidth: 1, borderRadius: 50, paddingHorizontal: 12, paddingVertical: 7 },
+  chipText:    { fontSize: 12, fontWeight: '600' },
   footer:      { flexDirection: 'row', justifyContent: 'center' },
   footerText:  { fontSize: 13 },
   footerLink:  { fontSize: 13, fontWeight: '700' },

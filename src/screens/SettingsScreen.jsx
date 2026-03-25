@@ -191,6 +191,11 @@ const SettingsScreen = ({ navigation }) => {
         <Text style={[styles.sectionLabel, { color: theme.secondaryText }]}>Support</Text>
         <View style={[styles.sectionCard, { backgroundColor: theme.card }]}>
           <SettingItem
+            iconName="briefcase"
+            title="Retailer Onboarding"
+            onPress={() => navigation.navigate('RetailerOnboardingScreen')}
+          />
+          <SettingItem
             iconName="help-circle"
             title="Help Center"
             onPress={() => navigation.navigate('HelpCenterScreen')}

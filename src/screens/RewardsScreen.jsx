@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl,
 } from 'react-native';
@@ -51,8 +51,8 @@ const RewardsScreen = ({ navigation }) => {
       setError('');
       const res = await apiFetchRewards();
       setData(res);
-    } catch {
-      setError('Failed to load rewards.');
+    } catch (err) {
+      setError(err?.message || 'Failed to load rewards.');
     } finally {
       setLoading(false);
     }
@@ -64,8 +64,8 @@ const RewardsScreen = ({ navigation }) => {
       setError('');
       const res = await apiFetchRewards();
       setData(res);
-    } catch {
-      setError('Failed to refresh.');
+    } catch (err) {
+      setError(err?.message || 'Failed to refresh.');
     } finally {
       setRefreshing(false);
     }
@@ -115,7 +115,7 @@ const RewardsScreen = ({ navigation }) => {
               <View>
                 <Text style={[styles.pointsLabel, { color: theme.secondaryText }]}>Total Points</Text>
                 <Text style={[styles.pointsVal, { color: theme.primary }]}>
-                  {data?.points.toLocaleString() ?? 0}
+                  {Number(data?.points || 0).toLocaleString()}
                 </Text>
               </View>
               <View style={[styles.tierBadge, { backgroundColor: tier.color + '20', borderColor: tier.color }]}> 
@@ -152,7 +152,7 @@ const RewardsScreen = ({ navigation }) => {
 
           {/* History */}
           <SectionHeader theme={theme} title="Recent Activity" containerStyle={{ marginTop: 0 }} />
-          {data?.history.map((item) => (
+          {(data?.history || []).map((item) => (
             <View key={item.id} style={[styles.histRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={[styles.histIcon, { backgroundColor: theme.primary + '18' }]}>
                 <Ionicons name="star-outline" size={16} color={theme.primary} />
@@ -167,7 +167,7 @@ const RewardsScreen = ({ navigation }) => {
 
           {/* Earn More */}
           <SectionHeader theme={theme} title="Earn More Points" containerStyle={{ marginTop: 28 }} />
-          {data?.activities.map((item) => (
+          {(data?.activities || []).map((item) => (
             <TouchableOpacity
               key={item.id}
               style={[styles.earnRow, { backgroundColor: theme.card, borderColor: theme.border }]}

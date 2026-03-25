@@ -2,8 +2,9 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_HOSTS = [
+  'https://fashion-planet-api-63de1c135e8e.herokuapp.com',
   'http://10.0.2.2:5000',
-  'http://192.168.18.24:5000',
+  'http://192.168.100.192:5000',
   'http://127.0.0.1:5000',
   'http://localhost:5000',
 ];

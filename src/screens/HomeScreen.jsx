@@ -1,6 +1,6 @@
 import {
   ScrollView, StatusBar, StyleSheet, Text,
-  TouchableOpacity, View, ActivityIndicator, RefreshControl, Animated, Image,
+  TouchableOpacity, View, ActivityIndicator, RefreshControl, Animated, Image, Linking,
 } from 'react-native';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,6 +63,32 @@ const RecentOutfitCard = ({ item, theme, onPress }) => (
     <View style={rcStyles.info}>
       <Text style={[rcStyles.title, { color: theme.text }]} numberOfLines={1}>{item.title}</Text>
       <Text style={[rcStyles.sub, { color: theme.secondaryText }]}>{item.subtitle}</Text>
+    </View>
+  </TouchableOpacity>
+);
+
+const BrandPill = ({ item, theme }) => (
+  <View style={[styles.brandPill, { borderColor: theme.border, backgroundColor: theme.card }]}> 
+    <Text style={[styles.brandName, { color: theme.text }]} numberOfLines={1}>{item.brandName}</Text>
+    <Text style={[styles.brandMeta, { color: theme.secondaryText }]}>{item.productsCount} product{item.productsCount !== 1 ? 's' : ''}</Text>
+  </View>
+);
+
+const ProductCard = ({ item, theme }) => (
+  <TouchableOpacity
+    style={[styles.productCard, { borderColor: theme.border, backgroundColor: theme.card }]}
+    activeOpacity={0.82}
+    onPress={() => {
+      if (item.productUrl) {
+        Linking.openURL(item.productUrl).catch(() => null);
+      }
+    }}
+  >
+    <Image source={{ uri: item.image }} style={styles.productImage} />
+    <View style={styles.productInfo}>
+      <Text style={[styles.productTitle, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+      <Text style={[styles.productSub, { color: theme.secondaryText }]} numberOfLines={1}>{item.brandName} • {item.category}</Text>
+      <Text style={[styles.productPrice, { color: theme.primary }]}>{item.currency} {Number(item.price || 0).toFixed(2)}</Text>
     </View>
   </TouchableOpacity>
 );
@@ -135,6 +161,8 @@ const HomeScreen = ({ navigation }) => {
 
   const displayWardrobe = wardrobeItems.length > 0 ? wardrobeItems.slice(0, 3) : PLACEHOLDER_WARDROBE;
   const recentOutfits = homeData.recentOutfits || [];
+  const featuredBrands = homeData.featuredBrands || [];
+  const featuredProducts = homeData.featuredProducts || [];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -240,6 +268,50 @@ const HomeScreen = ({ navigation }) => {
               )}
             </ScrollView>
 
+            <SectionHeader
+              theme={theme}
+              title="Featured Brands"
+              subtitle="Approved retailer partners"
+            />
+
+            {featuredBrands.length === 0 ? (
+              <EmptyState
+                theme={theme}
+                icon="storefront-outline"
+                title="No brands yet"
+                description="Approved retailer products will show up here once published."
+                containerStyle={styles.emptyWardrobeBox}
+              />
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 18 }}>
+                {featuredBrands.map((item) => (
+                  <BrandPill key={item.retailerApplicationId} item={item} theme={theme} />
+                ))}
+              </ScrollView>
+            )}
+
+            <SectionHeader
+              theme={theme}
+              title="Shop Inspiration"
+              subtitle="Retailer products related to your style"
+            />
+
+            {featuredProducts.length === 0 ? (
+              <EmptyState
+                theme={theme}
+                icon="bag-handle-outline"
+                title="No products yet"
+                description="Retailers will appear once they publish products."
+                containerStyle={styles.emptyWardrobeBox}
+              />
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
+                {featuredProducts.map((item) => (
+                  <ProductCard key={item.id} item={item} theme={theme} />
+                ))}
+              </ScrollView>
+            )}
+
             {/* FAB */}
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
               <TouchableOpacity
@@ -279,4 +351,13 @@ const styles = StyleSheet.create({
   emptyWardrobeBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 50, marginTop: 8 },
   emptyWardrobeBtnText: { color: '#141414', fontWeight: '700', fontSize: 14 },
   fab:                  { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 6, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 5, marginTop: 16 },
+  brandPill:            { borderWidth: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, marginRight: 10, minWidth: 150 },
+  brandName:            { fontSize: 13, fontWeight: '700' },
+  brandMeta:            { fontSize: 11, marginTop: 4 },
+  productCard:          { width: 180, borderWidth: 1, borderRadius: 14, overflow: 'hidden', marginRight: 12 },
+  productImage:         { width: '100%', height: 140, resizeMode: 'cover' },
+  productInfo:          { padding: 10 },
+  productTitle:         { fontSize: 13, fontWeight: '700' },
+  productSub:           { fontSize: 11, marginTop: 3 },
+  productPrice:         { fontSize: 13, fontWeight: '800', marginTop: 6 },
 });

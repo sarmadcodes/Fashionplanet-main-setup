@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, Modal, StatusBar,
+  TouchableOpacity, Modal, StatusBar, Alert, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { darkTheme, lightTheme } from '../theme/colors';
-import { apiFetchVouchers } from '../services/apiService';
+import { apiFetchVouchers, apiRedeemVoucher } from '../services/apiService';
 
 const Skeleton = ({ w, h, r = 10, style }) => {
   const { isDark } = useTheme();
@@ -20,17 +21,58 @@ const VouchersScreen = ({ navigation }) => {
 
   const [vouchers, setVouchers]   = useState([]);
   const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [redeemingId, setRedeemingId] = useState('');
   const [selected, setSelected]   = useState(null); // voucher to show QR for
 
-  useEffect(() => { load(); }, []);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [])
+  );
 
   const load = async () => {
     try {
       setLoading(true);
+      setError('');
       const data = await apiFetchVouchers();
       setVouchers(data);
+    } catch (err) {
+      setError(err?.message || 'Failed to load vouchers.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    try {
+      setRefreshing(true);
+      setError('');
+      const data = await apiFetchVouchers();
+      setVouchers(data);
+    } catch (err) {
+      setError(err?.message || 'Failed to refresh vouchers.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleRedeem = async (voucher) => {
+    try {
+      setRedeemingId(voucher.id);
+      const redeemed = await apiRedeemVoucher(voucher.id);
+      setSelected(null);
+      setVouchers((prev) => prev.map((item) => (
+        item.id === voucher.id
+          ? { ...item, ...redeemed, unlocked: false, redeemedAt: redeemed?.redeemedAt || new Date().toISOString() }
+          : item
+      )));
+      Alert.alert('Voucher redeemed', 'Your voucher was redeemed successfully.');
+    } catch (err) {
+      Alert.alert('Redeem failed', err?.message || 'Could not redeem this voucher.');
+    } finally {
+      setRedeemingId('');
     }
   };
 
@@ -87,9 +129,10 @@ const VouchersScreen = ({ navigation }) => {
             <TouchableOpacity
               style={[styles.redeemBtn, { backgroundColor: theme.primary }]}
               onPress={() => setSelected(item)}
+              disabled={redeemingId === item.id}
             >
               <Ionicons name="qr-code-outline" size={18} color="#141414" />
-              <Text style={styles.redeemBtnText}>Redeem</Text>
+              <Text style={styles.redeemBtnText}>{redeemingId === item.id ? '...' : 'Redeem'}</Text>
             </TouchableOpacity>
           ) : (
             <View style={[styles.redeemBtn, { backgroundColor: theme.border }]}>
@@ -127,10 +170,14 @@ const VouchersScreen = ({ navigation }) => {
           renderItem={renderVoucher}
           contentContainerStyle={{ paddingBottom: 80 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
           ListHeaderComponent={
-            <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
-              {vouchers.filter(v => v.unlocked).length} voucher{vouchers.filter(v => v.unlocked).length !== 1 ? 's' : ''} available to redeem
-            </Text>
+            <View>
+              <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+                {vouchers.filter(v => v.unlocked).length} voucher{vouchers.filter(v => v.unlocked).length !== 1 ? 's' : ''} available to redeem
+              </Text>
+              {error ? <Text style={[styles.errorText, { color: '#E56B6F' }]}>{error}</Text> : null}
+            </View>
           }
         />
       )}
@@ -153,6 +200,16 @@ const VouchersScreen = ({ navigation }) => {
             <View style={[styles.codePill, { backgroundColor: theme.background }]}>
               <Text style={[styles.codeText, { color: theme.text }]}>{selected?.code}</Text>
             </View>
+
+            <TouchableOpacity
+              style={[styles.confirmRedeemBtn, { backgroundColor: theme.primary }]}
+              disabled={!selected?.unlocked || redeemingId === selected?.id}
+              onPress={() => handleRedeem(selected)}
+            >
+              <Text style={styles.confirmRedeemText}>
+                {redeemingId === selected?.id ? 'Processing...' : 'Confirm Redeem'}
+              </Text>
+            </TouchableOpacity>
 
             <Text style={[styles.qrInstruction, { color: theme.secondaryText }]}>
               Show this code at the checkout counter for validation.
@@ -197,6 +254,9 @@ const styles = StyleSheet.create({
   qrFrame:        { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 20 },
   codePill:       { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 50, marginBottom: 16 },
   codeText:       { fontSize: 16, fontWeight: '700', letterSpacing: 3 },
+  confirmRedeemBtn:{ marginBottom: 14, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 50 },
+  confirmRedeemText:{ color: '#141414', fontSize: 13, fontWeight: '700' },
   qrInstruction:  { fontSize: 12, textAlign: 'center', lineHeight: 18, marginBottom: 6 },
   qrExpiry:       { fontSize: 11 },
+  errorText:      { fontSize: 12, marginBottom: 12 },
 });

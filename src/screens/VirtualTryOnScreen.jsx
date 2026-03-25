@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, StatusBar, Animated, Image, useWindowDimensions, ActivityIndicator,
@@ -9,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../theme/colors';
-import { apiFetchWardrobeItems } from '../services/apiService';
+import { apiFetchWardrobeItems, apiGenerateVirtualTryOn } from '../services/apiService';
 
 // ── Shimmer — high contrast visible pulse ─────────────────────
 const ShimmerBox = ({ w, h, r = 10, style }) => {
@@ -92,41 +91,65 @@ const VirtualTryOnScreen = ({ navigation }) => {
     return () => { clearInterval(timerRef.current); };
   }, []);
 
-  const tryOn = (item) => {
+  const startProgress = () => {
+    clearInterval(timerRef.current);
+    let p = 0;
+    setPercent(0);
+    timerRef.current = setInterval(() => {
+      p += Math.floor(Math.random() * 5) + 2;
+      setPercent((prev) => {
+        const next = Math.max(prev, p);
+        return next >= 92 ? 92 : next;
+      });
+    }, 180);
+  };
+
+  const stopProgress = () => {
+    clearInterval(timerRef.current);
+    setPercent(100);
+  };
+
+  const tryOn = async (item, forceFresh = false) => {
     setSelected(item);
     setResult(null);
-    setPercent(0);
     setLoading(true);
-    let p = 0;
-    timerRef.current = setInterval(() => {
-      p += Math.floor(Math.random() * 4) + 2;
-      if (p >= 100) {
-        p = 100;
-        setPercent(100);
-        clearInterval(timerRef.current);
-        setTimeout(() => { setLoading(false); setResult(item); }, 400);
-      } else {
-        setPercent(p);
-      }
-    }, 130);
+    startProgress();
+
+    try {
+      const generated = await apiGenerateVirtualTryOn({
+        itemId: item.id,
+        forceFresh,
+      });
+
+      stopProgress();
+      setTimeout(() => {
+        setLoading(false);
+        setResult({
+          ...item,
+          generatedImage: generated.generatedImage,
+          title: generated.title,
+          savedOutfitId: generated.savedOutfitId,
+          generationId: generated.generationId,
+          cacheHit: generated.cacheHit,
+        });
+      }, 250);
+    } catch (error) {
+      clearInterval(timerRef.current);
+      setLoading(false);
+      setPercent(0);
+      Alert.alert('Try-On Failed', error.message || 'Could not generate try-on. Please try again.');
+    }
   };
 
   const handleSaveLook = async () => {
     if (!result) return;
-    try {
-      const existing = await AsyncStorage.getItem('saved_looks');
-      const saved = existing ? JSON.parse(existing) : [];
-      const alreadySaved = saved.find((s) => s.id === result.id);
-      if (alreadySaved) {
-        Alert.alert('Already Saved', 'This look is already in your saved looks.');
-        return;
-      }
-      saved.unshift({ ...result, savedAt: new Date().toISOString() });
-      await AsyncStorage.setItem('saved_looks', JSON.stringify(saved));
-      Alert.alert('Saved!', 'Look saved to your collection.');
-    } catch {
-      Alert.alert('Error', 'Could not save look. Try again.');
-    }
+    Alert.alert('Saved', 'Your try-on image was saved in AI Outfits.', [
+      { text: 'OK' },
+      {
+        text: 'Open Outfits',
+        onPress: () => navigation.navigate('OutfitsScreen'),
+      },
+    ]);
   };
 
   return (
@@ -215,7 +238,7 @@ const VirtualTryOnScreen = ({ navigation }) => {
         {result && !loading && (
           <View style={[styles.resultCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <View style={{ position: 'relative' }}>
-              <Image source={{ uri: result.image }} style={styles.resultImg} />
+              <Image source={{ uri: result.generatedImage || result.image }} style={styles.resultImg} />
               <View style={[styles.resultBadge, { backgroundColor: '#6C63FF' }]}>
                 <Ionicons name="checkmark-circle" size={14} color="#fff" />
                 <Text style={styles.resultBadgeText}>Try-On Complete</Text>
@@ -224,14 +247,16 @@ const VirtualTryOnScreen = ({ navigation }) => {
             <View style={{ padding: 16 }}>
               <Text style={[styles.resultTitle, { color: theme.text }]}>{result.label}</Text>
               <Text style={[styles.resultSub, { color: theme.secondaryText }]}>
-                This look fits your style profile with a 91% match score.
+                {result.cacheHit
+                  ? 'Loaded from recent cache to save credits and keep it fast.'
+                  : 'Generated with low-cost AI mode for fast and affordable try-on previews.'}
               </Text>
               <View style={styles.resultActions}>
                 <TouchableOpacity style={[styles.saveBtn, { backgroundColor: theme.primary }]} onPress={handleSaveLook}> 
                   <Ionicons name="bookmark-outline" size={16} color="#141414" />
                   <Text style={styles.saveBtnText}>Save Look</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.outlineBtn, { borderColor: theme.border }]} onPress={() => tryOn(result)}>
+                <TouchableOpacity style={[styles.outlineBtn, { borderColor: theme.border }]} onPress={() => tryOn(selected || result, true)}>
                   <Ionicons name="refresh-outline" size={16} color={theme.text} />
                   <Text style={[styles.outlineBtnText, { color: theme.text }]}>Retry</Text>
                 </TouchableOpacity>
